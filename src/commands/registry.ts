@@ -3,6 +3,7 @@ import {
   EmbedBuilder,
   AttachmentBuilder,
   MessageFlags,
+  PermissionFlagsBits,
 } from 'discord.js';
 
 import { sellauth } from '../services/sellauth.js';
@@ -560,6 +561,15 @@ export async function handleCommandInteraction(
           await interaction.reply({
             ...privateReply,
             content: 'Unknown keygen subcommand.',
+          });
+          return;
+        }
+
+        // Only server administrators may generate license keys.
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          await interaction.reply({
+            ...privateReply,
+            content: '❌ Only server administrators can generate license keys.',
           });
           return;
         }
