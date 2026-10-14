@@ -10,6 +10,7 @@ import { RoleManager } from '../services/roleDistribution.js';
 import { InvoiceGenerator } from '../services/pdfInvoice.js';
 import { config } from '../config.js';
 import { randomBytes } from 'node:crypto';
+import { LicenseStore } from '../services/licenseStore.js';
 
 export async function handleCommandInteraction(
   client: Client,
@@ -123,6 +124,50 @@ export async function handleCommandInteraction(
         await interaction.reply({
           ...privateReply,
           embeds: [embed],
+        });
+        return;
+      }
+
+      // /redeem key
+      case 'redeem': {
+        const key = interaction.options.getString('key', true);
+
+        if (!interaction.guild) {
+          await interaction.reply({
+            ...privateReply,
+            content: 'You must redeem keys inside the server where you want the role.',
+          });
+          return;
+        }
+
+        if (!config.roles.verifiedCustomer) {
+          await interaction.reply({
+            ...privateReply,
+            content: '❌ The customer role is not configured. Ask a server administrator to set ROLE_VERIFIED_CUSTOMER.',
+          });
+          return;
+        }
+
+        const result = await LicenseStore.redeemKey(key, interaction.user.id);
+        if (!result.success) {
+          await interaction.reply({
+            ...privateReply,
+            content: `❌ ${result.message}`,
+          });
+          return;
+        }
+
+        try {
+          const member = await interaction.guild.members.fetch(interaction.user.id);
+          await member.roles.add(config.roles.verifiedCustomer);
+        } catch (error) {
+          await LicenseStore.releaseKey(key, interaction.user.id);
+          throw new Error('The key was valid, but I could not assign the role. Check my Manage Roles permission and role hierarchy.');
+        }
+
+        await interaction.reply({
+          ...privateReply,
+          content: '✅ Key redeemed successfully! Your **Verified Customer** role has been assigned.',
         });
         return;
       }
@@ -543,10 +588,11 @@ export async function handleCommandInteraction(
 
         // Create unique serials and add them to the selected SellAuth product.
         const keys = Array.from({ length: amount }, () =>
-          `ghostie-${randomBytes(4).toString('hex').toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`
+          `b4mods-${randomBytes(4).toString('hex').toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`
         );
 
         await sellauth.appendKeys(productId, keys);
+        await LicenseStore.registerKeys(keys);
 
         const attachment = new AttachmentBuilder(
           Buffer.from(keys.join('\n'), 'utf8'),
