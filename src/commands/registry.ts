@@ -1,8 +1,8 @@
-
 import {
   Client,
   EmbedBuilder,
   AttachmentBuilder,
+  MessageFlags,
 } from 'discord.js';
 
 import { sellauth } from '../services/sellauth.js';
@@ -13,334 +13,504 @@ import { config } from '../config.js';
 export async function handleCommandInteraction(
   client: Client,
   interaction: any
-) {
-  const { commandName } = interaction;
+): Promise<void> {
+  if (!interaction.isChatInputCommand()) return;
+
+  const commandName: string = interaction.commandName;
+  const subcommand: string =
+    interaction.options.getSubcommand(false) ?? '';
+
+  const privateReply = { flags: MessageFlags.Ephemeral };
 
   try {
     switch (commandName) {
-      case 'product-list': {
-        const products = await sellauth.getProducts();
+      // /product list
+      case 'product': {
+        if (subcommand !== 'list') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown product subcommand.',
+          });
+          return;
+        }
+
+        const result = await sellauth.getProducts();
+        const products = Array.isArray(result)
+          ? result
+          : result?.data ?? result?.products ?? [];
+
+        if (!products.length) {
+          await interaction.reply({
+            ...privateReply,
+            content: 'No products were returned by SellAuth.',
+          });
+          return;
+        }
 
         const embed = new EmbedBuilder()
           .setTitle('📦 SellAuth Product Inventory')
           .setColor(0x5865f2)
           .setDescription(
             products
+              .slice(0, 20)
               .map(
-                (p: any) =>
-                  `• **#${p.id} ${p.name}** — $${p.price} (${p.stock} in stock)`
+                (product: any) =>
+                  `**${product.name ?? 'Unnamed product'}**\n` +
+                  `ID: \`${product.id}\` · ` +
+                  `Price: $${product.price ?? 'N/A'} · ` +
+                  `Stock: ${product.stock ?? 'N/A'}`
               )
-              .join('\n')
-          );
+              .join('\n\n')
+          )
+          .setTimestamp();
 
-        return await interaction.reply({ embeds: [embed] });
+        await interaction.reply({
+          ...privateReply,
+          embeds: [embed],
+        });
+        return;
       }
 
-      case 'role-verify': {
-        const query = interaction.options.getString('query', true);
+      // /stock check
+      case 'stock': {
+        if (subcommand !== 'check') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown stock subcommand.',
+          });
+          return;
+        }
+
+        const productId = interaction.options.getString(
+          'product_id',
+          true
+        );
+
+        const product = await sellauth.getProduct(
+          Number(productId)
+        );
+
+        if (!product) {
+          await interaction.reply({
+            ...privateReply,
+            content: `Product ${productId} was not found.`,
+          });
+          return;
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle('📦 Product Stock')
+          .setColor(0x5865f2)
+          .addFields(
+            {
+              name: 'Product',
+              value: String(product.name ?? 'Unknown'),
+              inline: true,
+            },
+            {
+              name: 'Product ID',
+              value: String(product.id ?? productId),
+              inline: true,
+            },
+            {
+              name: 'Available Stock',
+              value: String(product.stock ?? 'Unknown'),
+              inline: true,
+            }
+          );
+
+        await interaction.reply({
+          ...privateReply,
+          embeds: [embed],
+        });
+        return;
+      }
+
+      // /role verify
+      case 'role': {
+        if (subcommand !== 'verify') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown role subcommand.',
+          });
+          return;
+        }
+
+        if (!interaction.guild) {
+          await interaction.reply({
+            ...privateReply,
+            content: 'This command must be used inside your server.',
+          });
+          return;
+        }
+
+        const query = interaction.options.getString(
+          'query',
+          true
+        );
 
         const result = await RoleManager.verifyAndAssign(
-          interaction.guild!,
+          interaction.guild,
           interaction.user.id,
           query
         );
 
-        if (result.success) {
-          return await interaction.reply({
-            content: `🎉 Verified! Granted role **${result.roleName}**. PDF invoice and license access unlocked!`,
-            ephemeral: true,
-          });
-        }
-
-        return await interaction.reply({
-          content: `❌ ${result.message}`,
-          ephemeral: true,
+        await interaction.reply({
+          ...privateReply,
+          content: result.success
+            ? `✅ Verification successful! Assigned **${result.roleName}**.`
+            : `❌ Verification failed: ${result.message}`,
         });
+        return;
       }
 
-      case 'invoice-pdf': {
-        const orderId = interaction.options.getString('order_id', true);
+      // /invoice pdf
+      case 'invoice': {
+        if (subcommand !== 'pdf') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown invoice subcommand.',
+          });
+          return;
+        }
+
+        const orderId = interaction.options.getString(
+          'order_id',
+          true
+        );
+
         const order = await sellauth.getOrder(orderId);
+
+        if (!order) {
+          await interaction.reply({
+            ...privateReply,
+            content: `Order ${orderId} was not found.`,
+          });
+          return;
+        }
+
         const pdf = InvoiceGenerator.generateBuffer(order);
 
-        return await interaction.reply({
-          content: `📄 Official PDF Invoice for Order #${orderId}:`,
+        await interaction.reply({
+          ...privateReply,
+          content: `📄 Invoice for order ${orderId}:`,
           files: [
             {
               attachment: pdf,
               name: `Invoice-${orderId}.pdf`,
             },
           ],
-          ephemeral: true,
         });
+        return;
       }
 
-      case 'revenue-today': {
+      // /analytics today
+      case 'analytics': {
+        if (subcommand !== 'today') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown analytics subcommand.',
+          });
+          return;
+        }
+
         const stats = await sellauth.getStats('day');
 
         const embed = new EmbedBuilder()
-          .setTitle("💰 SellAuth Today's Revenue")
+          .setTitle("💰 Today's SellAuth Analytics")
           .setColor(0x00ff88)
           .addFields(
             {
               name: 'Gross Revenue',
-              value: `$${stats.gross?.toFixed(2) || '0.00'}`,
+              value: `$${Number(stats.gross ?? 0).toFixed(2)}`,
               inline: true,
             },
             {
-              name: 'Total Orders',
-              value: `${stats.orders || 0}`,
+              name: 'Orders',
+              value: String(stats.orders ?? 0),
               inline: true,
             }
-          );
-
-        return await interaction.reply({ embeds: [embed] });
-      }
-
-      case 'notify-toggle-dms': {
-        const member = await interaction.guild?.members.fetch(
-          interaction.user.id
-        );
-
-        const isVerified = member?.roles.cache.some(
-          (r: any) =>
-            r.name === 'Verified Customer' || r.name.includes('VIP')
-        );
-
-        if (!isVerified) {
-          return await interaction.reply({
-            content:
-              '⛔ **Verified Customer Required**: You must hold the Verified Customer role to enable or disable purchase confirmation DMs.',
-            ephemeral: true,
-          });
-        }
-
-        const embed = new EmbedBuilder()
-          .setTitle('📬 Direct Message Purchase Notifications Updated')
-          .setColor(0x57f287)
-          .setDescription(
-            'Your preference for automated Discord DM delivery of license keys and PDF invoices has been updated successfully.'
           )
-          .setFooter({
-            text: 'SellAuth Notification Engine • Bot made by @PremiumNPC',
-          });
+          .setTimestamp();
 
-        return await interaction.reply({
+        await interaction.reply({
+          ...privateReply,
           embeds: [embed],
-          ephemeral: true,
         });
+        return;
       }
 
-      case 'order-search':
+      // /order search
       case 'order': {
-        const orderId =
-          interaction.options.getString('order-id') ||
-          interaction.options.getString('id') ||
-          interaction.options.getString('query');
-
-        if (!config.sellauth.apiKey) {
-          return await interaction.reply({
-            content:
-              '⚠️ **SellAuth API Key Required**: Configure SELLAUTH_API_KEY in your environment variables.',
-            ephemeral: true,
+        if (subcommand !== 'search') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown order subcommand.',
           });
+          return;
         }
 
-        if (!orderId) {
-          return await interaction.reply({
-            content: '❌ Please provide an order ID.',
-            ephemeral: true,
-          });
-        }
+        const orderId = interaction.options.getString(
+          'query',
+          true
+        );
 
         const order = await sellauth.getOrder(orderId);
 
         if (!order) {
-          return await interaction.reply({
-            content: `❌ Order #${orderId} not found in SellAuth records. Please verify the ID or invoice number.`,
-            ephemeral: true,
+          await interaction.reply({
+            ...privateReply,
+            content: `❌ Order ${orderId} was not found.`,
           });
+          return;
         }
 
         const embed = new EmbedBuilder()
-          .setTitle(`📦 SellAuth Order Details — #${order.id || orderId}`)
-          .setColor(
-            order.status === 'COMPLETED' ? 0x57f287 : 0xfee75c
-          )
-          .setDescription(
-            'Detailed transaction and fulfillment records retrieved from SellAuth.'
-          )
+          .setTitle(`📦 Order ${order.id ?? orderId}`)
+          .setColor(0x5865f2)
           .addFields(
             {
-              name: 'Product Purchased',
-              value: `**${order.productName}** (Qty: ${order.quantity})`,
+              name: 'Status',
+              value: String(order.status ?? 'Unknown'),
               inline: true,
             },
             {
-              name: 'Customer Email',
-              value: `${order.customerEmail || 'Not available'}`,
+              name: 'Product',
+              value: String(order.productName ?? 'Unknown'),
               inline: true,
             },
             {
-              name: 'Total Paid',
-              value: `**$${Number(order.total || 0).toFixed(2)} ${order.currency || ''}** (${order.paymentMethod || 'Unknown'})`,
+              name: 'Total',
+              value: `${order.currency ?? ''} ${order.total ?? 'Unknown'}`,
               inline: true,
             },
             {
-              name: 'Invoice Reference',
-              value: `${order.invoiceNumber || 'Not available'}`,
+              name: 'Payment Method',
+              value: String(order.paymentMethod ?? 'Unknown'),
               inline: true,
             },
             {
-              name: 'Order Status',
-              value: `${order.status || 'Unknown'}`,
+              name: 'Invoice',
+              value: String(order.invoiceNumber ?? order.id ?? orderId),
               inline: true,
-            },
-            {
-              name: 'Role Assigned',
-              value: `@${order.roleAssigned || 'Verified Customer'}`,
-              inline: true,
-            },
-            {
-              name: 'Delivered License Keys',
-              value: `\`\`\`\n${order.deliveredKeys?.join('\n') || 'Instant Delivery'}\n\`\`\``,
-              inline: false,
-            },
-            {
-              name: 'Store Control Status',
-              value: 'SellAuth API integration configured',
-              inline: false,
             }
           )
-          .setFooter({
-            text: 'SellAuth Order Inspector • Bot made by @PremiumNPC',
-          });
+          .setTimestamp();
 
-        return await interaction.reply({ embeds: [embed] });
+        await interaction.reply({
+          ...privateReply,
+          embeds: [embed],
+        });
+        return;
       }
 
-      case 'ticket-export':
+      // /ticket export
       case 'ticket': {
-        const ticketId =
-          interaction.options.getString('ticket_id') ||
-          interaction.options.getString('id') ||
-          '1042';
+        if (subcommand !== 'export') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown ticket subcommand.',
+          });
+          return;
+        }
 
+        const ticketId = interaction.options.getString(
+          'ticket_id',
+          true
+        );
         const format = (
-          interaction.options.getString('format') || 'json'
+          interaction.options.getString('format') ?? 'json'
         ).toLowerCase();
-
         const includeAttachments =
-          interaction.options.getBoolean('include_attachments') ?? true;
+          interaction.options.getBoolean('include_attachments') ??
+          true;
 
         const isJson = format === 'json';
+        const filename =
+          `ticket-${ticketId}-transcript.${isJson ? 'json' : 'txt'}`;
 
-        const filename = `ticket-${ticketId}-transcript.${isJson ? 'json' : 'txt'}`;
-
-        const transcriptPayload = isJson
+        const transcript = isJson
           ? JSON.stringify(
               {
-                export_metadata: {
-                  system: 'SellAuth Discord Bot',
-                  watermark: 'Bot made by @PremiumNPC',
-                  exported_at: new Date().toISOString(),
-                  exported_by: interaction.user.tag,
-                  ticket_id: ticketId,
-                  format: 'JSON',
-                  include_attachments: includeAttachments,
-                },
-                ticket: {
-                  id: ticketId,
-                  channel: `ticket-${ticketId}`,
-                  subject: 'Customer Order Support Session',
-                  status: 'OPEN',
-                  priority: 'MEDIUM',
-                  customer: {
-                    username: interaction.user.tag,
-                    id: interaction.user.id,
-                  },
-                  attachments: includeAttachments
-                    ? [
-                        {
-                          filename: `invoice_proof_${ticketId}.png`,
-                          contentType: 'image/png',
-                          note: 'Attachment metadata only; no file contents are included.',
-                        },
-                      ]
-                    : [],
-                },
+                exportedAt: new Date().toISOString(),
+                exportedBy: interaction.user.tag,
+                ticketId,
+                includeAttachments,
+                note:
+                  'This export contains command-provided metadata. ' +
+                  'It does not retrieve actual ticket channel messages.',
               },
               null,
               2
             )
-          : `================================================================================
-SELLAUTH SUPPORT TICKET TRANSCRIPT — #${ticketId}
-Exported by: ${interaction.user.tag} • Bot made by @PremiumNPC
-Include Attachments: ${includeAttachments ? 'YES' : 'NO'}
-================================================================================`;
+          : [
+              `Ticket transcript metadata: ${ticketId}`,
+              `Exported by: ${interaction.user.tag}`,
+              `Exported at: ${new Date().toISOString()}`,
+              `Include attachments: ${includeAttachments}`,
+              '',
+              'Note: Actual ticket messages have not been retrieved.',
+            ].join('\n');
 
-        const fileAttachment = new AttachmentBuilder(
-          Buffer.from(transcriptPayload, 'utf8'),
+        const file = new AttachmentBuilder(
+          Buffer.from(transcript, 'utf8'),
           { name: filename }
         );
 
+        await interaction.reply({
+          ...privateReply,
+          content:
+            '⚠️ Exported ticket metadata. Actual channel messages are not integrated yet.',
+          files: [file],
+        });
+        return;
+      }
+
+      // /system status
+      case 'system': {
+        if (subcommand !== 'status') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown system subcommand.',
+          });
+          return;
+        }
+
         const embed = new EmbedBuilder()
-          .setTitle(`📁 Support Ticket #${ticketId} Transcript Exported`)
+          .setTitle('⚙️ Bot System Status')
           .setColor(0x57f287)
-          .setDescription(
-            `Transcript compiled for **#ticket-${ticketId}**.`
-          )
           .addFields(
             {
-              name: 'Format',
-              value: isJson ? 'JSON' : 'TEXT',
+              name: 'Discord',
+              value: client.isReady() ? 'Connected' : 'Connecting',
               inline: true,
             },
             {
-              name: 'Attachments Included',
-              value: includeAttachments ? 'Yes' : 'No',
+              name: 'SellAuth API Key',
+              value: config.sellauth.apiKey
+                ? 'Configured'
+                : 'Missing',
               inline: true,
             },
             {
-              name: 'File Attached',
-              value: filename,
+              name: 'Uptime',
+              value: `${Math.floor(process.uptime())} seconds`,
               inline: true,
             }
           )
-          .setFooter({
-            text: 'SellAuth Ticket Engine • Bot made by @PremiumNPC',
-          });
+          .setTimestamp();
 
-        return await interaction.reply({
+        await interaction.reply({
+          ...privateReply,
           embeds: [embed],
-          files: [fileAttachment],
         });
+        return;
+      }
+
+      // /security status
+      case 'security': {
+        if (subcommand !== 'status') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown security subcommand.',
+          });
+          return;
+        }
+
+        await interaction.reply({
+          ...privateReply,
+          embeds: [
+            new EmbedBuilder()
+              .setTitle('🔐 Security Status')
+              .setColor(0x5865f2)
+              .setDescription(
+                'The bot is connected. This command does not yet ' +
+                'run a full security audit or retrieve SellAuth fraud data.'
+              )
+              .setTimestamp(),
+          ],
+        });
+        return;
+      }
+
+      // /notify toggle-dms
+      case 'notify': {
+        if (subcommand !== 'toggle-dms') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown notification subcommand.',
+          });
+          return;
+        }
+
+        await interaction.reply({
+          ...privateReply,
+          content:
+            '⚠️ The notification preference storage is not implemented yet. ' +
+            'No settings were changed.',
+        });
+        return;
+      }
+
+      // These commands are registered, but the required API methods
+      // or persistent storage are not present in the current service.
+      case 'keygen':
+      case 'customer':
+      case 'coupon':
+      case 'vouch':
+      case 'crypto':
+      case 'flashsale':
+      case 'dispute':
+      case 'affiliate': {
+        const featureNames: Record<string, string> = {
+          keygen: 'license key generation and product assignment',
+          customer: 'customer lookup',
+          coupon: 'coupon listing',
+          vouch: 'review submission',
+          crypto: 'cryptocurrency payment status',
+          flashsale: 'flash sale status',
+          dispute: 'payment dispute lookup',
+          affiliate: 'affiliate status lookup',
+        };
+
+        await interaction.reply({
+          ...privateReply,
+          content:
+            `⚠️ **/${commandName} ${subcommand}** is now recognized, ` +
+            `but ${featureNames[commandName]} is not connected to the ` +
+            'required SellAuth API method or storage yet. No changes were made.',
+        });
+        return;
       }
 
       default: {
-        return await interaction.reply({
-          content: `✨ Command /${commandName} received, but no handler is configured for it.`,
-          ephemeral: true,
+        await interaction.reply({
+          ...privateReply,
+          content: `Unknown command: /${commandName}`,
         });
       }
     }
-  } catch (err: any) {
-    console.error(`Error executing ${commandName}:`, err);
+  } catch (error) {
+    console.error(`Error executing /${commandName}:`, error);
 
-const message =
-  err instanceof Error ? err.message : 'An unexpected error occurred.';
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'An unexpected error occurred.';
 
+    const response = {
+      content: `❌ Failed to execute /${commandName}: ${message}`,
+      flags: MessageFlags.Ephemeral,
+    };
 
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({
-        content: `❌ Error: ${message}`,
-        ephemeral: true,
-      });
-    } else {
-      await interaction.reply({
-        content: `❌ Error: ${message}`,
-        ephemeral: true,
-      });
+    try {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp(response);
+      } else {
+        await interaction.reply(response);
+      }
+    } catch (replyError) {
+      console.error('Could not send command error response:', replyError);
     }
   }
 }
