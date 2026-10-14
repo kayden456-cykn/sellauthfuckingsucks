@@ -25,6 +25,17 @@ export const client = new Client({
 });
 
 client.once('clientReady', async () => {
+client.user?.setStatus('online');
+
+client.user?.setPresence({
+  status: 'online',
+  activities: [
+    {
+      name: 'SellAuth Licenses',
+      type: 3,
+    },
+  ],
+});
   console.log(
     `🤖 [SellAuth Bot] Logged in as ${client.user?.tag}`
   );
