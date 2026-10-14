@@ -37,6 +37,13 @@ Fill in:
 - The redemption database is stored at `data/license-keys.json`. Use persistent disk storage on your hosting provider; ephemeral filesystems can erase the redemption database after a restart or redeploy.
 - If the bot reports that SellAuth rejected an upload, the keys are saved for Discord redemption but were **not** added to SellAuth. Do not sell those keys through SellAuth until the upload/API issue is fixed.
 
+### Stock management
+
+- `/stock check product_id:<ID>` checks the current stock reported for a SellAuth product.
+- `/stock restock product_id:<ID> serials:<keys>` adds up to 100 serials/license keys to that product. Paste one key per line, or separate keys with commas.
+- Restocking is restricted to Discord server administrators. The bot's Discord permissions do not replace SellAuth API-key permissions; the SellAuth key must be allowed to append serials.
+- `/product list` lists products and the stock values returned by SellAuth.
+
 ### 3. Deploy Slash Commands
 Deploy all 100+ slash commands to your server:
 ```bash
