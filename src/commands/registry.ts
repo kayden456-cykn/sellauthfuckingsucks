@@ -544,3 +544,18 @@ export async function handleCommandInteraction(
 
         return;
       }
+    }
+  } catch (error) {
+    console.error(`Error executing /${commandName}:`, error);
+    const message = error instanceof Error ? error.message : 'Unexpected error';
+
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ content: `❌ Failed to execute command: ${message}` });
+    } else {
+      await interaction.reply({
+        ...privateReply,
+        content: `❌ Failed to execute command: ${message}`,
+      });
+    }
+  }
+}
