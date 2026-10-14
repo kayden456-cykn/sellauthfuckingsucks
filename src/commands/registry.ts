@@ -549,7 +549,7 @@ export async function handleCommandInteraction(
         await sellauth.appendKeys(productId, keys);
 
         const attachment = new AttachmentBuilder(
-          Buffer.from(keys.join('\\n'), 'utf8'),
+          Buffer.from(keys.join('\n'), 'utf8'),
           { name: `license-keys-product-${productId}.txt` }
         );
 
