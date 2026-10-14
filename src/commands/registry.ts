@@ -9,6 +9,7 @@ import { sellauth } from '../services/sellauth.js';
 import { RoleManager } from '../services/roleDistribution.js';
 import { InvoiceGenerator } from '../services/pdfInvoice.js';
 import { config } from '../config.js';
+import { randomBytes } from 'node:crypto';
 
 export async function handleCommandInteraction(
   client: Client,
@@ -508,8 +509,58 @@ export async function handleCommandInteraction(
         return;
       }
 
+      // /keygen generate
+      case 'keygen': {
+        if (subcommand !== 'generate') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown keygen subcommand.',
+          });
+          return;
+        }
+
+        const productIdRaw = interaction.options.getString('product_id', true);
+        const productId = Number(productIdRaw);
+        const amount = interaction.options.getInteger('amount', true);
+
+        if (!Number.isSafeInteger(productId) || productId <= 0) {
+          await interaction.reply({
+            ...privateReply,
+            content: '❌ Product ID must be a positive number.',
+          });
+          return;
+        }
+
+        if (!Number.isInteger(amount) || amount < 1 || amount > 100) {
+          await interaction.reply({
+            ...privateReply,
+            content: '❌ Amount must be between 1 and 100.',
+          });
+          return;
+        }
+
+        await interaction.deferReply(privateReply);
+
+        // Create unique serials and add them to the selected SellAuth product.
+        const keys = Array.from({ length: amount }, () =>
+          `ghostie-${randomBytes(4).toString('hex').toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`
+        );
+
+        await sellauth.appendKeys(productId, keys);
+
+        const attachment = new AttachmentBuilder(
+          Buffer.from(keys.join('\\n'), 'utf8'),
+          { name: `license-keys-product-${productId}.txt` }
+        );
+
+        await interaction.editReply({
+          content: `✅ Generated and uploaded **${keys.length}** license keys to SellAuth product **${productId}**. The keys are attached in a private text file.`,
+          files: [attachment],
+        });
+        return;
+      }
+
       // Other commands: integrations still need to be implemented.
-      case 'keygen':
       case 'customer':
       case 'coupon':
       case 'vouch':
