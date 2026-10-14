@@ -8,7 +8,7 @@ import {
 import { sellauth } from '../services/sellauth.js';
 import { RoleManager } from '../services/roleDistribution.js';
 import { InvoiceGenerator } from '../services/pdfInvoice.js';
-import { config } from './config.js';
+import { config } from '../config.js';
 
 export async function handleCommandInteraction(
   client: Client,
