@@ -74,9 +74,9 @@ export async function handleCommandInteraction(
         return;
       }
 
-      // /stock check
+      // /stock check | /stock restock
       case 'stock': {
-        if (subcommand !== 'check') {
+        if (subcommand !== 'check' && subcommand !== 'restock') {
           await interaction.reply({
             ...privateReply,
             content: 'Unknown stock subcommand.',
@@ -84,20 +84,74 @@ export async function handleCommandInteraction(
           return;
         }
 
-        const productId = interaction.options.getString(
-          'product_id',
-          true
-        );
-
-        const product = await sellauth.getProduct(
-          Number(productId)
-        );
-
-        if (!product) {
+        // Only administrators can change SellAuth inventory.
+        if (
+          subcommand === 'restock' &&
+          !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
+        ) {
           await interaction.reply({
             ...privateReply,
-            content: `Product ${productId} was not found.`,
+            content: '❌ Only server administrators can restock products.',
           });
+          return;
+        }
+
+        const productIdRaw = interaction.options.getString('product_id', true);
+        const productId = Number(productIdRaw);
+
+        if (!Number.isSafeInteger(productId) || productId <= 0) {
+          await interaction.reply({
+            ...privateReply,
+            content: '❌ Product ID must be a positive number.',
+          });
+          return;
+        }
+
+        if (subcommand === 'restock') {
+          const serialsInput = interaction.options.getString('serials', true);
+          const serials = [...new Set(
+            serialsInput
+              .split(/[\\r\\n,]+/)
+              .map((serial: string) => serial.trim())
+              .filter(Boolean)
+          )];
+
+          if (serials.length === 0) {
+            await interaction.reply({
+              ...privateReply,
+              content: '❌ Paste at least one license key, one per line.',
+            });
+            return;
+          }
+
+          if (serials.length > 100) {
+            await interaction.reply({
+              ...privateReply,
+              content: '❌ You can add up to 100 keys per restock. Split larger batches into multiple commands.',
+            });
+            return;
+          }
+
+          await interaction.deferReply(privateReply);
+          const product = await sellauth.getProduct(productId);
+          if (!product) {
+            await interaction.editReply(`❌ Product ${productId} was not found.`);
+            return;
+          }
+
+          await sellauth.appendKeys(productId, serials);
+          await interaction.editReply(
+            `✅ Added **${serials.length}** serials to **${product.name ?? `product #${productId}`}** in SellAuth.`
+          );
+          return;
+        }
+
+        await interaction.deferReply(privateReply);
+        const result = await sellauth.getProduct(productId);
+        const product = result?.data ?? result?.product ?? result;
+
+        if (!product || typeof product !== 'object') {
+          await interaction.editReply(`❌ Product ${productId} was not found.`);
           return;
         }
 
@@ -120,12 +174,10 @@ export async function handleCommandInteraction(
               value: String(product.stock ?? 'Unknown'),
               inline: true,
             }
-          );
+          )
+          .setTimestamp();
 
-        await interaction.reply({
-          ...privateReply,
-          embeds: [embed],
-        });
+        await interaction.editReply({ embeds: [embed] });
         return;
       }
 
