@@ -93,7 +93,6 @@ export class SellAuthClient {
 
     return res.data;
   }
-  }
 }
 
 export const sellauth = new SellAuthClient();
