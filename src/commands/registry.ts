@@ -452,34 +452,87 @@ export async function handleCommandInteraction(
         return;
       }
 
-      // These commands are registered, but the required API methods
-      // or persistent storage are not present in the current service.
+// /affiliate status
+      case 'affiliate': {
+        if (subcommand !== 'status') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Unknown affiliate subcommand.',
+          });
+          return;
+        }
+
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral,
+        });
+
+        try {
+          const result = await sellauth.getAffiliates();
+
+          const affiliates = Array.isArray(result)
+            ? result
+            : result?.data ?? result?.affiliates ?? [];
+
+          if (!affiliates.length) {
+            await interaction.editReply(
+              'No affiliates were returned by SellAuth.'
+            );
+            return;
+          }
+
+          const embed = new EmbedBuilder()
+            .setTitle('Affiliate Status')
+            .setColor(0x5865f2)
+            .setDescription(
+              affiliates.slice(0, 15).map((affiliate: any) =>
+                [
+                  `**${affiliate.name ?? affiliate.username ?? 'Affiliate'}**`,
+                  `ID: \`${affiliate.id ?? 'N/A'}\``,
+                  `Code: \`${affiliate.code ?? 'N/A'}\``,
+                  `Status: ${affiliate.status ?? 'Not provided'}`,
+                ].join('\n')
+              ).join('\n\n')
+            );
+
+          await interaction.editReply({
+            embeds: [embed],
+          });
+        } catch (error) {
+          console.error('Affiliate lookup failed:', error);
+
+          await interaction.editReply(
+            '❌ Affiliate lookup failed. Check the API endpoint and permissions.'
+          );
+        }
+
+        return;
+      }
+
+      // Other commands: integrations still need to be implemented.
       case 'keygen':
       case 'customer':
       case 'coupon':
       case 'vouch':
       case 'crypto':
       case 'flashsale':
-      case 'dispute':
-      case 'affiliate': {
+      case 'dispute': {
         const featureNames: Record<string, string> = {
-          keygen: 'license key generation and product assignment',
-          customer: 'customer lookup',
-          coupon: 'coupon listing',
-          vouch: 'review submission',
-          crypto: 'cryptocurrency payment status',
-          flashsale: 'flash sale status',
-          dispute: 'payment dispute lookup',
-          affiliate: 'affiliate status lookup',
+          keygen: 'License key generation',
+          customer: 'Customer lookup',
+          coupon: 'Coupon management',
+          vouch: 'Review submission',
+          crypto: 'Cryptocurrency payment status',
+          flashsale: 'Flash sale management',
+          dispute: 'Payment dispute lookup',
         };
 
         await interaction.reply({
           ...privateReply,
           content:
-            `⚠️ **/${commandName} ${subcommand}** is now recognized, ` +
-            `but ${featureNames[commandName]} is not connected to the ` +
-            'required SellAuth API method or storage yet. No changes were made.',
+            `⚠️ **/${commandName}${subcommand ? ` ${subcommand}` : ''}** ` +
+            `is registered, but ${featureNames[commandName]} has not been integrated yet.`,
         });
+
         return;
       }
 
@@ -488,29 +541,6 @@ export async function handleCommandInteraction(
           ...privateReply,
           content: `Unknown command: /${commandName}`,
         });
+
+        return;
       }
-    }
-  } catch (error) {
-    console.error(`Error executing /${commandName}:`, error);
-
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'An unexpected error occurred.';
-
-    const response = {
-      content: `❌ Failed to execute /${commandName}: ${message}`,
-      flags: MessageFlags.Ephemeral,
-    };
-
-    try {
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(response);
-      } else {
-        await interaction.reply(response);
-      }
-    } catch (replyError) {
-      console.error('Could not send command error response:', replyError);
-    }
-  }
-}
