@@ -83,7 +83,9 @@ export class SellAuthClient {
   async getStats(period: 'day' | 'week' | 'month' | 'all' = 'day') {
     const res = await this.api.get(`/shops/${config.sellauth.shopId}/analytics?period=${period}`);
     return res.data;
-      // --- Affiliates ---
+  }
+
+  // --- Affiliates ---
   async getAffiliates() {
     const res = await this.api.get(
       `/shops/${config.sellauth.shopId}/affiliates`
