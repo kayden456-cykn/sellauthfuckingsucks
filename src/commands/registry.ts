@@ -586,21 +586,30 @@ export async function handleCommandInteraction(
 
         await interaction.deferReply(privateReply);
 
-        // Create unique serials and add them to the selected SellAuth product.
+        // Generate B4 Mods keys and persist them for one-time Discord redemption.
         const keys = Array.from({ length: amount }, () =>
           `b4mods-${randomBytes(4).toString('hex').toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`
         );
 
-        await sellauth.appendKeys(productId, keys);
         await LicenseStore.registerKeys(keys);
+
+        let uploadedToSellAuth = true;
+        try {
+          await sellauth.appendKeys(productId, keys);
+        } catch (error) {
+          uploadedToSellAuth = false;
+          console.error('SellAuth key upload failed; keys remain available for bot redemption:', error);
+        }
 
         const attachment = new AttachmentBuilder(
           Buffer.from(keys.join('\n'), 'utf8'),
-          { name: `license-keys-product-${productId}.txt` }
+          { name: `b4mods-keys-product-${productId}.txt` }
         );
 
         await interaction.editReply({
-          content: `✅ Generated and uploaded **${keys.length}** license keys to SellAuth product **${productId}**. The keys are attached in a private text file.`,
+          content: uploadedToSellAuth
+            ? `✅ Generated **${keys.length}** B4 Mods keys and uploaded them to SellAuth product **${productId}**. They are also saved for one-time /redeem role claims. Keys are attached privately.`
+            : `⚠️ Generated **${keys.length}** B4 Mods keys and saved them for one-time /redeem role claims, but SellAuth rejected the upload for product **${productId}**. These keys were NOT added to SellAuth. Check the API endpoint/permissions before selling them there. Keys are attached privately.`,
           files: [attachment],
         });
         return;
