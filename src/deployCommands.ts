@@ -95,6 +95,17 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
+    .setName('redeem')
+    .setDescription('Redeem a B4 Mods license key for your customer role')
+    .addStringOption(option =>
+      option
+        .setName('key')
+        .setDescription('Your B4 Mods license key')
+        .setRequired(true)
+        .setMaxLength(100)
+    ),
+
+  new SlashCommandBuilder()
     .setName('analytics')
     .setDescription('View store analytics')
     .addSubcommand(subcommand =>
