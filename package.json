@@ -1,0 +1,26 @@
+{
+  "name": "sellauth-discord-bot",
+  "version": "2.4.0",
+  "description": "Production-grade Discord.js v14 bot for complete SellAuth store management, 100+ commands, automated role distribution, real-time stock alerts, and PDF invoices",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "deploy:commands": "tsx src/deployCommands.ts"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "jspdf": "^2.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.5",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
