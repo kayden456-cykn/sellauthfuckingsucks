@@ -77,7 +77,13 @@ const commands = [
     .addSubcommand(subcommand =>
       subcommand
         .setName('generate')
-        .setDescription('Generate license keys')
+        .setDescription('Generate license keys for a product')
+        .addStringOption(option =>
+          option
+            .setName('product_id')
+            .setDescription('SellAuth product ID to add the keys to')
+            .setRequired(true)
+        )
         .addIntegerOption(option =>
           option
             .setName('amount')
