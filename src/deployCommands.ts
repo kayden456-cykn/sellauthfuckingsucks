@@ -36,8 +36,26 @@ const commands = [
         .addStringOption(option =>
           option
             .setName('product_id')
-            .setDescription('Product ID')
+            .setDescription('SellAuth product ID')
             .setRequired(true)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('restock')
+        .setDescription('Add license keys/serials to a SellAuth product')
+        .addStringOption(option =>
+          option
+            .setName('product_id')
+            .setDescription('SellAuth product ID')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('serials')
+            .setDescription('Paste keys separated by new lines or commas (max 100)')
+            .setRequired(true)
+            .setMaxLength(4000)
         )
     ),
 
