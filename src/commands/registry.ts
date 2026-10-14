@@ -111,7 +111,7 @@ export async function handleCommandInteraction(
           const serialsInput = interaction.options.getString('serials', true);
           const serials = [...new Set(
             serialsInput
-              .split(/[\\r\\n,]+/)
+              .split(/[\r\n,]+/)
               .map((serial: string) => serial.trim())
               .filter(Boolean)
           )];
@@ -133,8 +133,9 @@ export async function handleCommandInteraction(
           }
 
           await interaction.deferReply(privateReply);
-          const product = await sellauth.getProduct(productId);
-          if (!product) {
+          const result = await sellauth.getProduct(productId);
+          const product = result?.data ?? result?.product ?? result;
+          if (!product || typeof product !== 'object') {
             await interaction.editReply(`❌ Product ${productId} was not found.`);
             return;
           }
