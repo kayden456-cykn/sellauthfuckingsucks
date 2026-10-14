@@ -221,7 +221,7 @@ export async function handleCommandInteraction(
 
         await interaction.reply({
           ...privateReply,
-          content: '✅ Key redeemed successfully! Your **Verified Customer** role has been assigned.',
+          content: '✅ Key redeemed successfully! Your **BUYER** role has been assigned.',
         });
         return;
       }
