@@ -180,7 +180,7 @@ export async function handleCommandInteraction(
               serialsInput
                 .split(/[\r\n,]+/)
                 .map((serial: string) => serial.trim())
-                .filter((serial): serial is string => serial.length > 0)
+                .filter((serial: string): serial is string => serial.length > 0)
             )
           );
 
