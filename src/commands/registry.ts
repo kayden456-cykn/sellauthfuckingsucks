@@ -4,6 +4,12 @@ import {
   AttachmentBuilder,
   MessageFlags,
   PermissionFlagsBits,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from 'discord.js';
 
 import { sellauth } from '../services/sellauth.js';
@@ -17,6 +23,38 @@ export async function handleCommandInteraction(
   client: Client,
   interaction: any
 ): Promise<void> {
+  // Redemption panel button opens a modal for the SellAuth order ID.
+  if (interaction.isButton() && interaction.customId === 'b4_redeem_order') {
+    const modal = new ModalBuilder()
+      .setCustomId('b4_redeem_order_modal')
+      .setTitle('Redeem Your Order');
+    const orderIdInput = new TextInputBuilder()
+      .setCustomId('sellauth_order_id')
+      .setLabel('SellAuth order ID')
+      .setPlaceholder('Enter your order ID')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(100);
+    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(orderIdInput));
+    await interaction.showModal(modal);
+    return;
+  }
+
+  if (interaction.isModalSubmit() && interaction.customId === 'b4_redeem_order_modal') {
+    const orderId = interaction.fields.getTextInputValue('sellauth_order_id').trim();
+    if (!orderId || orderId.length > 100) {
+      await interaction.reply({ content: 'Please enter a valid SellAuth order ID.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    // Do not automatically grant the buyer role from an order ID alone: it does not prove ownership.
+    // This safely collects the ID and lets staff verify ownership before assigning the role.
+    await interaction.reply({
+      content: `✅ Order ID \`\${orderId.replace(/\`/g, '')}\` submitted. Staff must verify the order belongs to you before assigning the **BUYER** role.`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const commandName: string = interaction.commandName;
@@ -31,6 +69,28 @@ export async function handleCommandInteraction(
 
   try {
     switch (commandName) {
+      case 'redeem-panel': {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          await interaction.reply({ content: '❌ Only server administrators can post the redemption panel.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        const embed = new EmbedBuilder()
+          .setTitle('👑 Redeem Your Order')
+          .setDescription('Click the button below and enter your SellAuth order ID to claim the buyer role.')
+          .setColor(0x8b5cf6)
+          .setFooter({ text: 'B4 Mods • Powered by SellAuth' });
+        const button = new ButtonBuilder()
+          .setCustomId('b4_redeem_order')
+          .setLabel('Redeem Order')
+          .setStyle(ButtonStyle.Primary);
+        await interaction.channel.send({
+          embeds: [embed],
+          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(button)],
+        });
+        await interaction.reply({ content: '✅ Redemption panel posted in this channel.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+
       // /product list
       case 'product': {
         if (subcommand !== 'list') {
