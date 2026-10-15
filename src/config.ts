@@ -16,6 +16,12 @@ export const config = {
     baseUrl: 'https://api.sellauth.com/v1',
   },
 
+  tickets: {
+    categoryId: process.env.TICKET_CATEGORY_ID || '',
+    supportRoleId: process.env.TICKET_SUPPORT_ROLE_ID || '',
+    logChannelId: process.env.TICKET_LOG_CHANNEL_ID || '',
+  },
+
   channels: {
     transactionsLog: process.env.CHANNEL_TRANSACTIONS_LOG || '',
     stockAlerts: process.env.CHANNEL_STOCK_ALERTS || '',
