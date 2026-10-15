@@ -42,8 +42,11 @@ export class SellAuthClient {
   }
 
   // --- Licenses & Keys ---
-  async appendKeys(productId: number, keys: string[]) {
-    const res = await this.api.post(`/shops/${config.sellauth.shopId}/products/${productId}/serials`, { serials: keys });
+  async appendKeys(productId: number, variantId: string, keys: string[]) {
+    const res = await this.api.put(
+      `/shops/${config.sellauth.shopId}/products/${productId}/deliverables/append/${variantId}`,
+      { deliverables: keys }
+    );
     return res.data;
   }
 
