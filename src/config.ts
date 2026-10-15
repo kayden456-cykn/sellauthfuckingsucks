@@ -17,9 +17,9 @@ export const config = {
   },
 
   ai: {
-    apiKey: process.env.AI_API_KEY || '',
-    baseUrl: (process.env.AI_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\\/$/, ''),
-    model: process.env.AI_MODEL || 'llama-3.3-70b-versatile',
+    apiKey: process.env.OPENAI_API_KEY || process.env.AI_API_KEY || '',
+    baseUrl: (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, ''),
+    model: process.env.AI_MODEL || 'gpt-4o-mini',
   },
 
   tickets: {
