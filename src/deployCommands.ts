@@ -190,6 +190,10 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
+    .setName('ticket-panel')
+    .setDescription('Post the support ticket creation panel'),
+
+  new SlashCommandBuilder()
     .setName('ticket')
     .setDescription('Manage support tickets')
     .addSubcommand(subcommand =>
