@@ -16,6 +16,12 @@ export const config = {
     baseUrl: 'https://api.sellauth.com/v1',
   },
 
+  ai: {
+    apiKey: process.env.AI_API_KEY || '',
+    baseUrl: (process.env.AI_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\\/$/, ''),
+    model: process.env.AI_MODEL || 'llama-3.3-70b-versatile',
+  },
+
   tickets: {
     categoryId: process.env.TICKET_CATEGORY_ID || '',
     supportRoleId: process.env.TICKET_SUPPORT_ROLE_ID || '',
