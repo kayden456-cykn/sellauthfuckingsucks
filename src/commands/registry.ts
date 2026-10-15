@@ -78,7 +78,6 @@ export async function handleCommandInteraction(
       case 'stock': {
         if (subcommand !== 'check' && subcommand !== 'restock') {
           await interaction.reply({
-            ...privateReply,
             content: 'Unknown stock subcommand.',
           });
           return;
@@ -90,7 +89,6 @@ export async function handleCommandInteraction(
           !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
         ) {
           await interaction.reply({
-            ...privateReply,
             content: '❌ Only server administrators can restock products.',
           });
           return;
@@ -101,7 +99,6 @@ export async function handleCommandInteraction(
 
         if (!Number.isSafeInteger(productId) || productId <= 0) {
           await interaction.reply({
-            ...privateReply,
             content: '❌ Product ID must be a positive number.',
           });
           return;
@@ -118,21 +115,19 @@ export async function handleCommandInteraction(
 
           if (serials.length === 0) {
             await interaction.reply({
-              ...privateReply,
-              content: '❌ Paste at least one license key, one per line.',
+                content: '❌ Paste at least one license key, one per line.',
             });
             return;
           }
 
           if (serials.length > 100) {
             await interaction.reply({
-              ...privateReply,
-              content: '❌ You can add up to 100 keys per restock. Split larger batches into multiple commands.',
+                content: '❌ You can add up to 100 keys per restock. Split larger batches into multiple commands.',
             });
             return;
           }
 
-          await interaction.deferReply(privateReply);
+          await interaction.deferReply();
           const result = await sellauth.getProduct(productId);
           const product = result?.data ?? result?.product ?? result;
           if (!product || typeof product !== 'object') {
@@ -147,7 +142,7 @@ export async function handleCommandInteraction(
           return;
         }
 
-        await interaction.deferReply(privateReply);
+        await interaction.deferReply();
         const result = await sellauth.getProduct(productId);
         const product = result?.data ?? result?.product ?? result;
 
