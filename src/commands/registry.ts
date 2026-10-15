@@ -23,7 +23,11 @@ export async function handleCommandInteraction(
   const subcommand: string =
     interaction.options.getSubcommand(false) ?? '';
 
-  const privateReply = { flags: MessageFlags.Ephemeral };
+  // Replies in this channel should be public; keep replies ephemeral elsewhere.
+  const privateReply =
+    interaction.channelId === '1559728973603405854'
+      ? {}
+      : { flags: MessageFlags.Ephemeral };
 
   try {
     switch (commandName) {
