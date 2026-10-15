@@ -106,12 +106,14 @@ export async function handleCommandInteraction(
 
         if (subcommand === 'restock') {
           const serialsInput = interaction.options.getString('serials', true);
-          const serials = [...new Set(
-            serialsInput
-              .split(/[\r\n,]+/)
-              .map((serial: string) => serial.trim())
-              .filter(Boolean)
-          )];
+          const serials: string[] = Array.from(
+            new Set<string>(
+              serialsInput
+                .split(/[\r\n,]+/)
+                .map((serial: string) => serial.trim())
+                .filter((serial): serial is string => serial.length > 0)
+            )
+          );
 
           if (serials.length === 0) {
             await interaction.reply({
