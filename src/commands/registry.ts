@@ -700,6 +700,26 @@ export async function handleCommandInteraction(
         return;
       }
 
+      // /echo message
+      case 'echo': {
+        const message = interaction.options.getString('message', true).trim();
+
+        if (!message) {
+          await interaction.reply({
+            ...privateReply,
+            content: '❌ Enter a message for me to echo.',
+          });
+          return;
+        }
+
+        // Post publicly, but prevent accidental @everyone, @here, and user/role pings.
+        await interaction.reply({
+          content: message,
+          allowedMentions: { parse: [] },
+        });
+        return;
+      }
+
       // /fun coinflip | /fun joke | /fun 8ball
       case 'fun': {
         const jokes = [
