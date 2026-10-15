@@ -736,29 +736,20 @@ export async function handleCommandInteraction(
           console.error('SellAuth key upload failed; keys remain available for bot redemption:', error);
         }
 
-        // Send keys only to the admin who generated them, via DM (never attach a file).
+        // DM the generated keys to the admin as a .txt file.
         let dmSent = true;
         try {
-          const header = `🔑 Your ${keys.length} generated B4 Mods keys for product ${productId}:\n`;
-          const chunks: string[] = [];
-          let current = header;
-          for (const key of keys) {
-            const line = `${key}\n`;
-            if (current.length + line.length > 1800) {
-              chunks.push(current);
-              current = '';
-            }
-            current += line;
-          }
-          if (current) chunks.push(current);
-
-          for (let i = 0; i < chunks.length; i++) {
-            const prefix = chunks.length > 1 ? `Part ${i + 1}/${chunks.length}\n` : '';
-            await interaction.user.send(prefix + chunks[i]);
-          }
+          const keyFile = new AttachmentBuilder(
+            Buffer.from(keys.join('\n'), 'utf8'),
+            { name: `b4mods-keys-product-${productId}.txt` }
+          );
+          await interaction.user.send({
+            content: `🔑 Your ${keys.length} generated B4 Mods keys for product ${productId}:`,
+            files: [keyFile],
+          });
         } catch (error) {
           dmSent = false;
-          console.error('Could not DM generated keys to command user:', error);
+          console.error('Could not DM generated key file to command user:', error);
         }
 
         await interaction.editReply({
