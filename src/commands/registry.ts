@@ -700,6 +700,61 @@ export async function handleCommandInteraction(
         return;
       }
 
+      // /fun coinflip | /fun joke | /fun 8ball
+      case 'fun': {
+        const jokes = [
+          'Why did the developer go broke? Because they used up all their cache.',
+          'There are 10 kinds of people: those who understand binary and those who don’t.',
+          'Why do programmers prefer dark mode? Because light attracts bugs.',
+          'I told my computer I needed a break, and it said: “No problem — I’ll go to sleep.”',
+          'Why was the Discord bot calm? It had great server stability.',
+        ];
+        const answers = [
+          'It is certain. 🔮',
+          'Probably, twin. ✨',
+          'Signs point to yes. 👀',
+          'Ask again after the next update. 💻',
+          'The vibes say no. 🥀',
+          'Cannot predict that one — the API is acting up. 😭',
+          'Absolutely. Ship it. 🚀',
+          'I would not count on it. 🫡',
+        ];
+
+        if (subcommand === 'coinflip') {
+          await interaction.reply(
+            Math.random() < 0.5 ? '🪙 **Heads!**' : '🪙 **Tails!**'
+          );
+          return;
+        }
+
+        if (subcommand === 'joke') {
+          await interaction.reply(
+            jokes[Math.floor(Math.random() * jokes.length)]
+          );
+          return;
+        }
+
+        if (subcommand === '8ball') {
+          const question = interaction.options.getString('question', true);
+          const answer = answers[Math.floor(Math.random() * answers.length)];
+          const embed = new EmbedBuilder()
+            .setTitle('🔮 Magic 8-Ball')
+            .setColor(0x8b5cf6)
+            .addFields(
+              { name: 'Question', value: question },
+              { name: 'Answer', value: answer }
+            )
+            .setFooter({ text: `Asked by ${interaction.user.username}` });
+          await interaction.reply({ embeds: [embed] });
+          return;
+        }
+
+        await interaction.reply({
+          content: 'Pick a subcommand: coinflip, joke, or 8ball.',
+        });
+        return;
+      }
+
       default: {
         await interaction.reply({
           ...privateReply,
