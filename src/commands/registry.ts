@@ -109,6 +109,11 @@ export async function handleCommandInteraction(
         }
 
         if (subcommand === 'restock') {
+          const variantId = interaction.options.getString('variant_id', true);
+          if (!/^\d+$/.test(variantId) || Number(variantId) <= 0) {
+            await interaction.reply({ content: '❌ Variant ID must be a positive numeric SellAuth variant ID.' });
+            return;
+          }
           const serialsInput = interaction.options.getString('serials', true);
           const serials: string[] = Array.from(
             new Set<string>(
@@ -141,7 +146,7 @@ export async function handleCommandInteraction(
             return;
           }
 
-          await sellauth.appendKeys(productId, serials);
+          await sellauth.appendKeys(productId, variantId, serials);
           await interaction.editReply(
             `✅ Added **${serials.length}** serials to **${product.name ?? `product #${productId}`}** in SellAuth.`
           );
@@ -630,6 +635,7 @@ export async function handleCommandInteraction(
 
         const productIdRaw = interaction.options.getString('product_id', true);
         const productId = Number(productIdRaw);
+        const variantId = interaction.options.getString('variant_id', true);
         const amount = interaction.options.getInteger('amount', true);
 
         if (!Number.isSafeInteger(productId) || productId <= 0) {
@@ -637,6 +643,11 @@ export async function handleCommandInteraction(
             ...privateReply,
             content: '❌ Product ID must be a positive number.',
           });
+          return;
+        }
+
+        if (!/^\d+$/.test(variantId) || Number(variantId) <= 0) {
+          await interaction.reply({ ...privateReply, content: '❌ Variant ID must be a positive numeric SellAuth variant ID.' });
           return;
         }
 
@@ -659,7 +670,7 @@ export async function handleCommandInteraction(
 
         let uploadedToSellAuth = true;
         try {
-          await sellauth.appendKeys(productId, keys);
+          await sellauth.appendKeys(productId, variantId, keys);
         } catch (error) {
           uploadedToSellAuth = false;
           console.error('SellAuth key upload failed; keys remain available for bot redemption:', error);
