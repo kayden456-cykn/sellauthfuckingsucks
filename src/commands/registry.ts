@@ -23,6 +23,80 @@ export async function handleCommandInteraction(
   client: Client,
   interaction: any
 ): Promise<void> {
+  // Ticket creation and close buttons.
+  if (interaction.isButton() && interaction.customId === 'b4_ticket_create') {
+    const guild = interaction.guild;
+    if (!guild) {
+      await interaction.reply({ content: 'Tickets can only be opened inside the server.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const existing = guild.channels.cache.find((channel: any) =>
+      channel.type === 0 && channel.topic?.includes(`ticket-owner:${interaction.user.id}`)
+    );
+    if (existing) {
+      await interaction.reply({ content: `You already have an open ticket: <#${existing.id}>`, flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const safeName = interaction.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 20) || 'user';
+    const overwrites: any[] = [
+      { id: guild.roles.everyone.id, deny: ['ViewChannel'] },
+      { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles', 'EmbedLinks'] },
+      { id: client.user!.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels'] },
+    ];
+    if (config.tickets.supportRoleId) {
+      overwrites.push({ id: config.tickets.supportRoleId, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'] });
+    }
+    const channel = await guild.channels.create({
+      name: `ticket-${safeName}`,
+      type: 0,
+      topic: `ticket-owner:${interaction.user.id}`,
+      parent: config.tickets.categoryId || undefined,
+      permissionOverwrites: overwrites,
+    });
+    const closeButton = new ButtonBuilder()
+      .setCustomId('b4_ticket_close')
+      .setLabel('Close Ticket')
+      .setStyle(ButtonStyle.Danger);
+    const greeting = new EmbedBuilder()
+      .setTitle('🎫 Support Ticket')
+      .setDescription(`Welcome <@${interaction.user.id}>! Describe your issue and a staff member will help you.${config.tickets.supportRoleId ? `\n\n<@&${config.tickets.supportRoleId}>\n` : ''}`)
+      .setColor(0x8b5cf6)
+      .setTimestamp();
+    await channel.send({
+      embeds: [greeting],
+      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(closeButton)],
+      allowedMentions: { users: [interaction.user.id], roles: config.tickets.supportRoleId ? [config.tickets.supportRoleId] : [] },
+    });
+    await interaction.reply({ content: `✅ Your ticket is ready: <#${channel.id}>`, flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId === 'b4_ticket_close') {
+    const channel = interaction.channel;
+    const guild = interaction.guild;
+    if (!guild || !channel || !('topic' in channel) || !channel.topic?.startsWith('ticket-owner:')) {
+      await interaction.reply({ content: 'This is not a recognized ticket channel.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const ownerId = channel.topic.slice('ticket-owner:'.length);
+    const isOwner = interaction.user.id === ownerId;
+    const isAdmin = Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.Administrator));
+    const hasSupportRole = Boolean(config.tickets.supportRoleId && interaction.member?.roles?.cache?.has(config.tickets.supportRoleId));
+    if (!isOwner && !isAdmin && !hasSupportRole) {
+      await interaction.reply({ content: 'Only the ticket creator, support staff, or an administrator can close this ticket.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    await interaction.reply({ content: '🔒 Ticket closed. This channel will be deleted in 5 seconds.' });
+    if (config.tickets.logChannelId) {
+      const logChannel = guild.channels.cache.get(config.tickets.logChannelId);
+      if (logChannel && logChannel.isTextBased() && 'send' in logChannel) {
+        await logChannel.send(`🔒 Ticket <#${channel.id}> closed by <@${interaction.user.id}> (owner <@${ownerId}>).`);
+      }
+    }
+    setTimeout(() => { void channel.delete('Ticket closed').catch(console.error); }, 5000);
+    return;
+  }
+
   // Redemption panel button opens a modal for the SellAuth order ID.
   if (interaction.isButton() && interaction.customId === 'b4_redeem_order') {
     const modal = new ModalBuilder()
@@ -69,6 +143,26 @@ export async function handleCommandInteraction(
 
   try {
     switch (commandName) {
+      case 'ticket-panel': {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          await interaction.reply({ content: '❌ Only administrators can post the ticket panel.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        const embed = new EmbedBuilder()
+          .setTitle('🎫 B4 Mods Support')
+          .setDescription('Need help? Click **Open Ticket** below to create a private support channel. Please explain your issue clearly and wait for staff.')
+          .setColor(0x8b5cf6)
+          .setFooter({ text: 'B4 Mods Support' });
+        const button = new ButtonBuilder()
+          .setCustomId('b4_ticket_create')
+          .setLabel('Open Ticket')
+          .setEmoji('🎫')
+          .setStyle(ButtonStyle.Success);
+        await interaction.channel.send({ embeds: [embed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(button)] });
+        await interaction.reply({ content: '✅ Ticket panel posted.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+
       case 'redeem-panel': {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
           await interaction.reply({ content: '❌ Only server administrators can post the redemption panel.', flags: MessageFlags.Ephemeral });
