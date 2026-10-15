@@ -52,6 +52,12 @@ const commands = [
         )
         .addStringOption(option =>
           option
+            .setName('variant_id')
+            .setDescription('SellAuth variant ID for the deliverables')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option
             .setName('serials')
             .setDescription('Paste keys separated by new lines or commas (max 100)')
             .setRequired(true)
@@ -100,6 +106,12 @@ const commands = [
           option
             .setName('product_id')
             .setDescription('SellAuth product ID to add the keys to')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('variant_id')
+            .setDescription('SellAuth variant ID to add the keys to')
             .setRequired(true)
         )
         .addIntegerOption(option =>
