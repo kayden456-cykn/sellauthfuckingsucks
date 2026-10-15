@@ -263,6 +263,17 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
+    .setName('echo')
+    .setDescription('Make the bot repeat a message')
+    .addStringOption(option =>
+      option
+        .setName('message')
+        .setDescription('The message the bot should send')
+        .setRequired(true)
+        .setMaxLength(2000)
+    ),
+
+  new SlashCommandBuilder()
     .setName('fun')
     .setDescription('Random fun commands')
     .addSubcommand(subcommand =>
