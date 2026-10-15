@@ -263,6 +263,32 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
+    .setName('fun')
+    .setDescription('Random fun commands')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('coinflip')
+        .setDescription('Flip a coin')
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('joke')
+        .setDescription('Get a random joke')
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('8ball')
+        .setDescription('Ask the magic 8-ball a question')
+        .addStringOption(option =>
+          option
+            .setName('question')
+            .setDescription('Your question for the 8-ball')
+            .setRequired(true)
+            .setMaxLength(200)
+        )
+    ),
+
+  new SlashCommandBuilder()
     .setName('affiliate')
     .setDescription('Manage affiliate information')
     .addSubcommand(subcommand =>
