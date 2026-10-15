@@ -3,6 +3,9 @@ import { config } from './config.js';
 
 const commands = [
   new SlashCommandBuilder()
+    .setName('redeem-panel')
+    .setDescription('Post the buyer role redemption panel in this channel'),
+  new SlashCommandBuilder()
     .setName('order')
     .setDescription('Manage customer orders')
     .addSubcommand(subcommand =>
