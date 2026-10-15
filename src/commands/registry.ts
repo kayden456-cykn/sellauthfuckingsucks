@@ -736,16 +736,39 @@ export async function handleCommandInteraction(
           console.error('SellAuth key upload failed; keys remain available for bot redemption:', error);
         }
 
-        const attachment = new AttachmentBuilder(
-          Buffer.from(keys.join('\n'), 'utf8'),
-          { name: `b4mods-keys-product-${productId}.txt` }
-        );
+        // Send keys only to the admin who generated them, via DM (never attach a file).
+        let dmSent = true;
+        try {
+          const header = `🔑 Your ${keys.length} generated B4 Mods keys for product ${productId}:\n`;
+          const chunks: string[] = [];
+          let current = header;
+          for (const key of keys) {
+            const line = `${key}\n`;
+            if (current.length + line.length > 1800) {
+              chunks.push(current);
+              current = '';
+            }
+            current += line;
+          }
+          if (current) chunks.push(current);
+
+          for (let i = 0; i < chunks.length; i++) {
+            const prefix = chunks.length > 1 ? `Part ${i + 1}/${chunks.length}\n` : '';
+            await interaction.user.send(prefix + chunks[i]);
+          }
+        } catch (error) {
+          dmSent = false;
+          console.error('Could not DM generated keys to command user:', error);
+        }
 
         await interaction.editReply({
           content: uploadedToSellAuth
-            ? `✅ Generated **${keys.length}** B4 Mods keys and uploaded them to SellAuth product **${productId}**. They are also saved for one-time /redeem role claims. Keys are attached privately.`
-            : `⚠️ Generated **${keys.length}** B4 Mods keys and saved them for one-time /redeem role claims, but SellAuth rejected the upload for product **${productId}**. These keys were NOT added to SellAuth. Check the API endpoint/permissions before selling them there. Keys are attached privately.`,
-          files: [attachment],
+            ? (dmSent
+                ? `✅ Generated **${keys.length}** B4 Mods keys and uploaded them to SellAuth product **${productId}**. The keys were sent to your DMs and saved for one-time /redeem role claims.`
+                : `⚠️ Generated **${keys.length}** B4 Mods keys and uploaded them to SellAuth product **${productId}**, but I couldn't DM you the keys. Enable DMs from this server and try again; no file was attached.`)
+            : (dmSent
+                ? `⚠️ Generated **${keys.length}** B4 Mods keys and sent them to your DMs for one-time /redeem role claims, but SellAuth rejected the upload for product **${productId}**. These keys were NOT added to SellAuth. Check the API endpoint/permissions before selling them there.`
+                : `⚠️ Generated **${keys.length}** B4 Mods keys, but SellAuth rejected the upload and I couldn't DM you the keys. These keys were NOT added to SellAuth. Enable DMs from this server before generating another batch.`),
         });
         return;
       }
