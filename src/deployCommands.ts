@@ -169,6 +169,36 @@ const commands = [
       subcommand
         .setName('list')
         .setDescription('List available coupons')
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('create')
+        .setDescription('Create a discount coupon (administrators only)')
+        .addStringOption(option =>
+          option
+            .setName('code')
+            .setDescription('Coupon code customers will enter')
+            .setRequired(true)
+            .setMinLength(3)
+            .setMaxLength(32)
+        )
+        .addNumberOption(option =>
+          option
+            .setName('discount')
+            .setDescription('Discount value (percentage or fixed amount)')
+            .setRequired(true)
+            .setMinValue(0.01)
+        )
+        .addStringOption(option =>
+          option
+            .setName('type')
+            .setDescription('Discount type')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Percentage', value: 'percentage' },
+              { name: 'Fixed amount', value: 'fixed' }
+            )
+        )
     ),
 
   new SlashCommandBuilder()
