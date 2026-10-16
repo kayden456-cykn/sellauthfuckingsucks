@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-const apiKey = process.env.GROQ_API_KEY;
+const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) {
-  console.log("GROQ_API_KEY is not configured. Add it in GitHub Settings > Secrets and variables > Actions to enable AI repair.");
+  console.log("OPENAI_API_KEY is not configured. Add it in GitHub Settings > Secrets and variables > Actions to enable AI repair.");
   process.exit(0);
 }
 
@@ -12,7 +12,7 @@ function redactSensitive(text) {
   return text
     .replace(/(token|api[_-]?key|secret|password|authorization)(\s*["']?\s*[:=]\s*["']?)([^\s"'\x60,;]+)/gi, "$1$2[REDACTED]")
     .replace(/[\w-]{24,}\.[\w-]{6,}\.[\w-]{20,}/g, "[REDACTED_DISCORD_TOKEN]")
-    .replace(/gsk_[A-Za-z0-9]{20,}/g, "[REDACTED_GROQ_KEY]");
+    .replace(/sk-[A-Za-z0-9_-]{20,}/g, "[REDACTED_OPENAI_KEY]");
 }
 
 const logPath = process.argv[2] || "/tmp/failed-build.log";
@@ -48,14 +48,14 @@ ${logs || "(No failure log was available; inspect for obvious TypeScript compile
 SOURCE CONTEXT (sensitive patterns redacted):
 ${context}`;
 
-const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+const response = await fetch("https://api.openai.com/v1/chat/completions", {
   method: "POST",
   headers: {
     "Authorization": `Bearer ${apiKey}`,
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
-    model: "llama-3.3-70b-versatile",
+    model: "gpt-4.1-mini",
     temperature: 0,
     max_tokens: 6000,
     messages: [
