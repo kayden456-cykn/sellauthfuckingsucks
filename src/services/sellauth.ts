@@ -88,6 +88,20 @@ export class SellAuthClient {
     return res.data;
   }
 
+  // --- Coupons ---
+  async createCoupon(data: {
+    code: string;
+    discount: number;
+    type: 'percentage' | 'fixed';
+    global: boolean;
+  }) {
+    const res = await this.api.post(
+      `/shops/${config.sellauth.shopId}/coupons`,
+      data
+    );
+    return res.data;
+  }
+
   // --- Affiliates ---
   async getAffiliates() {
     const res = await this.api.get(
