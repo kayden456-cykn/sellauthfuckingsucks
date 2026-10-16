@@ -44,7 +44,7 @@ client.user?.setPresence({
     `📊 Connected to Guild: ${config.discord.guildId}`
   );
 
-  client.user?.setActivity('redeem keys on B4 Mods', {
+  client.user?.setActivity('redeeming keys in b4 mods', {
     type: 0,
   });
 
