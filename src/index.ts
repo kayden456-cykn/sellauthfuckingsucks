@@ -44,8 +44,8 @@ client.user?.setPresence({
     `📊 Connected to Guild: ${config.discord.guildId}`
   );
 
-  client.user?.setActivity('Bot made by @PremiumNPC', {
-    type: 3,
+  client.user?.setActivity('redeem keys on B4 Mods', {
+    type: 0,
   });
 
   try {
