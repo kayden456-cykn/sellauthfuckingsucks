@@ -858,9 +858,63 @@ export async function handleCommandInteraction(
         return;
       }
 
+      // Coupon creation is restricted to Discord administrators.
+      case 'coupon': {
+        if (subcommand !== 'create') {
+          await interaction.reply({
+            ...privateReply,
+            content: 'Coupon listing is not integrated yet. Use /coupon create to make a coupon.',
+          });
+          return;
+        }
+
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          await interaction.reply({
+            content: '❌ Only server administrators can create discount coupons.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const code = interaction.options.getString('code', true).trim().toUpperCase();
+        const discount = interaction.options.getNumber('discount', true);
+        const type = interaction.options.getString('type', true) as 'percentage' | 'fixed';
+
+        if (!/^[A-Z0-9_-]{3,32}$/.test(code)) {
+          await interaction.reply({
+            content: '❌ Coupon code must be 3–32 characters and use only letters, numbers, underscores, or hyphens.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        if (!Number.isFinite(discount) || discount <= 0 || (type === 'percentage' && discount > 100)) {
+          await interaction.reply({
+            content: type === 'percentage'
+              ? '❌ Percentage discount must be greater than 0 and no more than 100.'
+              : '❌ Fixed discount must be greater than 0.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const result = await sellauth.createCoupon({
+          code,
+          discount,
+          type,
+          global: true,
+        });
+        const coupon = result?.data ?? result?.coupon ?? result;
+        const createdCode = String(coupon?.code ?? code);
+        await interaction.editReply(
+          `✅ Created coupon **${createdCode}** with a ${type === 'percentage' ? `${discount}% discount` : `fixed discount of ${discount}`}. It applies store-wide.`
+        );
+        return;
+      }
+
       // Other commands: integrations still need to be implemented.
       case 'customer':
-      case 'coupon':
       case 'vouch':
       case 'crypto':
       case 'flashsale':
