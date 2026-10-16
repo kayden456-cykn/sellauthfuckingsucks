@@ -8,8 +8,15 @@ if (!apiKey) {
   process.exit(0);
 }
 
+function redactSensitive(text) {
+  return text
+    .replace(/(token|api[_-]?key|secret|password|authorization)(\s*["']?\s*[:=]\s*["']?)([^\s"'\x60,;]+)/gi, "$1$2[REDACTED]")
+    .replace(/[\w-]{24,}\.[\w-]{6,}\.[\w-]{20,}/g, "[REDACTED_DISCORD_TOKEN]")
+    .replace(/gsk_[A-Za-z0-9]{20,}/g, "[REDACTED_GROQ_KEY]");
+}
+
 const logPath = process.argv[2] || "/tmp/failed-build.log";
-const logs = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8").slice(-16000) : "";
+const logs = redactSensitive(fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8").slice(-16000) : "");
 const allowedContextFiles = ["package.json", "tsconfig.json"];
 function walk(dir) {
   if (!fs.existsSync(dir)) return [];
@@ -23,22 +30,22 @@ const files = [...allowedContextFiles.filter((f) => fs.existsSync(f)), ...walk("
 let remaining = 50000;
 const context = files.map((file) => {
   if (remaining <= 0) return "";
-  const content = fs.readFileSync(file, "utf8").slice(0, remaining);
+  const content = redactSensitive(fs.readFileSync(file, "utf8")).slice(0, remaining);
   remaining -= content.length;
   return "\n--- FILE: " + file + " ---\n" + content;
 }).join("\n");
 
-const prompt = `You are repairing a TypeScript Discord bot after a failed GitHub Actions build.
+const prompt = `You are repairing a TypeScript Discord bot after a failed GitHub Actions build or Railway deployment.
 Return ONLY a unified git diff that can be applied with git apply. Do not use Markdown fences.
 Only modify existing files under src/. Do not modify package.json, lockfiles, workflows, secrets, deployment settings, or environment variables.
 Do not add network calls, telemetry, shell commands, or unrelated features. Never print or request secrets.
-The patch must address the actual build error. If no safe source-only fix is possible, return exactly NO_SAFE_FIX.
-After applying the patch, the repository runs npm run build as verification.
+The patch must address the actual error. If no safe source-only fix is possible, return exactly NO_SAFE_FIX.
+After applying the patch, the repository runs npm run build as verification. This build check does not prove runtime health.
 
-FAILED BUILD LOG:
-${logs || "(No failed build log was available; inspect for obvious TypeScript compile errors only.)"}
+FAILURE LOGS (sensitive patterns redacted):
+${logs || "(No failure log was available; inspect for obvious TypeScript compile errors only.)"}
 
-SOURCE CONTEXT:
+SOURCE CONTEXT (sensitive patterns redacted):
 ${context}`;
 
 const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -69,7 +76,7 @@ if (patch === "NO_SAFE_FIX") {
   console.log("AI could not identify a safe source-only fix.");
   process.exit(0);
 }
-patch = patch.replace(/^\`\`\`(?:diff|patch)?\s*/i, "").replace(/\s*\`\`\`$/, "");
+patch = patch.replace(/^```(?:diff|patch)?\s*/i, "").replace(/\s*```$/, "");
 if (!patch.includes("diff --git ") || !patch.includes("@@")) {
   console.error("AI response was not a valid unified diff.");
   process.exit(1);
