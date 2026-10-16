@@ -120,7 +120,7 @@ client.on('messageCreate', async (message) => {
           { role: 'user', content: `Discord username: ${message.author.username}\nMessage: ${message.content.slice(0, 3500)}` },
         ],
         temperature: 0.5,
-        max_tokens: 350,
+        max_completion_tokens: 350,
       }),
       signal: AbortSignal.timeout(20000),
     });
