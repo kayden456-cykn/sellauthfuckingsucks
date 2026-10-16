@@ -5,6 +5,8 @@ on:
     workflows: ["TypeScript CI"]
     types: [completed]
     branches: [main]
+  deployment_status:
+    states: [failure]
   workflow_dispatch:
 
 permissions:
@@ -12,48 +14,80 @@ permissions:
   actions: read
 
 concurrency:
-  group: ai-repair-${{ github.repository }}-${{ github.event.workflow_run.head_sha || github.sha }}
+  group: ai-repair-${{ github.repository }}-${{ github.event.workflow_run.head_sha || github.event.deployment.sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
   repair:
     if: >-
       ${{ github.event_name == 'workflow_dispatch' ||
-          (github.event.workflow_run.conclusion == 'failure' &&
+          (github.event_name == 'workflow_run' &&
+           github.event.workflow_run.conclusion == 'failure' &&
            github.event.workflow_run.event == 'push' &&
-           github.event.workflow_run.head_branch == 'main') }}
+           github.event.workflow_run.head_branch == 'main') ||
+          (github.event_name == 'deployment_status' &&
+           github.event.deployment_status.state == 'failure' &&
+           github.event.deployment.ref == 'main') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out the failed commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.event.deployment.sha || github.sha }}
           fetch-depth: 0
 
+      - name: Prevent repeated AI repair loops
+        id: loop_guard
+        run: |
+          MESSAGE="$(git log -1 --format=%s)"
+          if [ "$MESSAGE" = "fix: apply verified AI build repair" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping repair of a previous AI repair commit to prevent loops."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.loop_guard.outputs.skip != 'true'
         with:
           node-version: 22
 
       - name: Install dependencies
+        if: steps.loop_guard.outputs.skip != 'true'
         run: npm install
 
       - name: Collect failed build logs
-        if: ${{ github.event_name == 'workflow_run' }}
+        if: ${{ github.event_name == 'workflow_run' && steps.loop_guard.outputs.skip != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           FAILED_RUN_ID: ${{ github.event.workflow_run.id }}
         run: gh run view "$FAILED_RUN_ID" --log-failed > /tmp/failed-build.log || true
 
+      - name: Collect Railway runtime logs
+        if: ${{ github.event_name == 'deployment_status' && steps.loop_guard.outputs.skip != 'true' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ] || [ -z "$RAILWAY_SERVICE" ]; then
+            echo "::error::Add RAILWAY_TOKEN and RAILWAY_SERVICE in GitHub Actions secrets before runtime repair can run."
+            exit 1
+          fi
+          npm install --global @railway/cli
+          railway logs --latest --lines 200 --service "$RAILWAY_SERVICE" > /tmp/failed-build.log
+
       - name: Initialize manual run log
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && steps.loop_guard.outputs.skip != 'true' }}
         run: echo "Manual repair requested. Inspect source and attempt a safe build-only repair." > /tmp/failed-build.log
 
       - name: Generate, apply, and verify a source-only patch
+        if: steps.loop_guard.outputs.skip != 'true'
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: node .github/scripts/ai-fix.mjs /tmp/failed-build.log
 
       - name: Commit and push only a verified source fix
+        if: steps.loop_guard.outputs.skip != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
