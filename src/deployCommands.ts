@@ -1,4 +1,4 @@
-import { REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { config } from './config.js';
 
 const commands = [
@@ -165,6 +165,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName('coupon')
     .setDescription('Manage discount coupons')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand(subcommand =>
       subcommand
         .setName('list')
