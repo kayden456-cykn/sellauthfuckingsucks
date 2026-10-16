@@ -83,7 +83,7 @@ jobs:
       - name: Generate, apply, and verify a source-only patch
         if: steps.loop_guard.outputs.skip != 'true'
         env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: node .github/scripts/ai-fix.mjs /tmp/failed-build.log
 
       - name: Commit and push only a verified source fix
