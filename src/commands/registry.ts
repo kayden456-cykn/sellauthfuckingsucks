@@ -945,16 +945,30 @@ export async function handleCommandInteraction(
 
         if (!message) {
           await interaction.reply({
-            ...privateReply,
+            flags: MessageFlags.Ephemeral,
             content: '❌ Enter a message for me to echo.',
           });
           return;
         }
 
-        // Post publicly, but prevent accidental @everyone, @here, and user/role pings.
-        await interaction.reply({
+        const channel = interaction.channel;
+        if (!channel || !channel.isTextBased() || !('send' in channel)) {
+          await interaction.reply({
+            flags: MessageFlags.Ephemeral,
+            content: '❌ I cannot send messages in this channel.',
+          });
+          return;
+        }
+
+        // Send a separate normal channel message, not the slash-command response.
+        await channel.send({
           content: message,
           allowedMentions: { parse: [] },
+        });
+
+        await interaction.reply({
+          flags: MessageFlags.Ephemeral,
+          content: '✅ Message sent.',
         });
         return;
       }
