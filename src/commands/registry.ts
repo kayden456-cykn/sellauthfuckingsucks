@@ -858,20 +858,70 @@ export async function handleCommandInteraction(
         return;
       }
 
-      // Coupon creation is restricted to Discord administrators.
+      // Coupon listing and creation are restricted to Discord administrators.
       case 'coupon': {
-        if (subcommand !== 'create') {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
           await interaction.reply({
-            ...privateReply,
-            content: 'Coupon listing is not integrated yet. Use /coupon create to make a coupon.',
+            content: '❌ Only server administrators can manage discount coupons.',
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
 
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+        if (subcommand === 'list') {
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+          const result = await sellauth.getCoupons();
+          const coupons = Array.isArray(result)
+            ? result
+            : Array.isArray(result?.data)
+              ? result.data
+              : Array.isArray(result?.coupons)
+                ? result.coupons
+                : Array.isArray(result?.data?.coupons)
+                  ? result.data.coupons
+                  : [];
+
+          if (coupons.length === 0) {
+            await interaction.editReply('No coupons were returned by SellAuth.');
+            return;
+          }
+
+          const embed = new EmbedBuilder()
+            .setTitle('🎟️ SellAuth Coupons')
+            .setColor(0x5865f2)
+            .setDescription(
+              coupons.slice(0, 20).map((coupon: any) => {
+                const code = String(coupon.code ?? coupon.name ?? 'Unknown code');
+                const rawDiscount = coupon.discount ?? coupon.amount ?? coupon.value;
+                const discountType = String(coupon.type ?? coupon.discount_type ?? '').toLowerCase();
+                const discount = rawDiscount == null
+                  ? 'Discount not provided'
+                  : discountType.includes('percent') || coupon.percentage != null
+                    ? `${coupon.percentage ?? rawDiscount}% off`
+                    : discountType.includes('fixed') || discountType.includes('amount')
+                      ? `${rawDiscount} off`
+                      : String(rawDiscount);
+                const status = coupon.status ?? (coupon.active === false ? 'Inactive' : coupon.active === true ? 'Active' : 'Status unknown');
+                const uses = coupon.uses ?? coupon.used ?? coupon.usage_count;
+                const maxUses = coupon.max_uses ?? coupon.usage_limit;
+                const usage = uses == null
+                  ? ''
+                  : `\nUses: ${uses}${maxUses == null ? '' : ` / ${maxUses}`}`;
+                return `**${code}**\nDiscount: ${discount}\nStatus: ${status}${usage}`;
+              }).join('\n\n')
+            )
+            .setFooter({ text: `Showing ${Math.min(coupons.length, 20)} of ${coupons.length} coupons` })
+            .setTimestamp();
+
+          await interaction.editReply({ embeds: [embed] });
+          return;
+        }
+
+        if (subcommand !== 'create') {
           await interaction.reply({
-            content: '❌ Only server administrators can create discount coupons.',
             flags: MessageFlags.Ephemeral,
+            content: 'Unknown coupon subcommand.',
           });
           return;
         }
