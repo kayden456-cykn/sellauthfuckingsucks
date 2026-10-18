@@ -89,6 +89,13 @@ export class SellAuthClient {
   }
 
   // --- Coupons ---
+  async getCoupons() {
+    const res = await this.api.get(
+      `/shops/${config.sellauth.shopId}/coupons`
+    );
+    return res.data;
+  }
+
   async createCoupon(data: {
     code: string;
     discount: number;
