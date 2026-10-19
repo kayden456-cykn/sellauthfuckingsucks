@@ -79,8 +79,8 @@ const TICKET_AI_COOLDOWN_MS = 2500;
 
 client.on('messageCreate', async (message) => {
   if (!message.guild || message.author.bot || !message.inGuild()) return;
-  // Do not let the ticket AI respond to this Discord username.
-  if (message.author.username.toLowerCase() === '41t._') return;
+  // Ignore users who should not receive ticket AI replies.
+  if (['41t._', 'gbradley1220'].includes(message.author.username.toLowerCase())) return;
   if (!message.channel.isTextBased() || !('topic' in message.channel)) return;
 
   // AI replies only in ticket channels created by this bot.
