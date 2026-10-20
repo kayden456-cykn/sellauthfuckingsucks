@@ -23,6 +23,99 @@ export async function handleCommandInteraction(
   client: Client,
   interaction: any
 ): Promise<void> {
+  // B4 beta tester application dashboard.
+  if (interaction.isButton() && interaction.customId === 'b4_beta_apply') {
+    const modal = new ModalBuilder()
+      .setCustomId('b4_beta_application_modal')
+      .setTitle('B4 Beta Tester Application');
+
+    const whyInput = new TextInputBuilder()
+      .setCustomId('beta_why')
+      .setLabel('Why do you want to beta test?')
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true)
+      .setMaxLength(1000);
+    const platformInput = new TextInputBuilder()
+      .setCustomId('beta_platform')
+      .setLabel('What device/platform will you test on?')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(100);
+    const experienceInput = new TextInputBuilder()
+      .setCustomId('beta_experience')
+      .setLabel('Any software or bot testing experience?')
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true)
+      .setMaxLength(700);
+    const availabilityInput = new TextInputBuilder()
+      .setCustomId('beta_availability')
+      .setLabel('How often can you test and report bugs?')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(300);
+    const ideasInput = new TextInputBuilder()
+      .setCustomId('beta_ideas')
+      .setLabel('What would you test or improve?')
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true)
+      .setMaxLength(1000);
+
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(whyInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(platformInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(experienceInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(availabilityInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(ideasInput),
+    );
+    await interaction.showModal(modal);
+    return;
+  }
+
+  if (interaction.isModalSubmit() && interaction.customId === 'b4_beta_application_modal') {
+    const applicationChannelId = process.env.BETA_APPLICATION_CHANNEL_ID;
+    if (!applicationChannelId || !interaction.guild) {
+      await interaction.reply({
+        content: 'Applications are temporarily unavailable. Please tell a server administrator to configure BETA_APPLICATION_CHANNEL_ID in Railway.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const applicationChannel = await interaction.guild.channels.fetch(applicationChannelId).catch(() => null);
+    if (!applicationChannel || !applicationChannel.isTextBased() || !('send' in applicationChannel)) {
+      await interaction.reply({
+        content: 'The beta application inbox is not configured correctly. Please contact a server administrator.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const answer = (id: string) => interaction.fields.getTextInputValue(id).trim().slice(0, 1000) || 'No answer provided';
+    const applicationEmbed = new EmbedBuilder()
+      .setTitle('🧪 New B4 Redeemer Beta Tester Application')
+      .setColor(0xe53935)
+      .setDescription(`Applicant: <@${interaction.user.id}> (\`${interaction.user.id}\`)`)
+      .addFields(
+        { name: 'Why do you want to beta test?', value: answer('beta_why') },
+        { name: 'Device / platform', value: answer('beta_platform') },
+        { name: 'Testing experience', value: answer('beta_experience') },
+        { name: 'Availability', value: answer('beta_availability') },
+        { name: 'What would you test or improve?', value: answer('beta_ideas') },
+      )
+      .setFooter({ text: 'B4 Redeemer • Beta Applications' })
+      .setTimestamp();
+
+    await applicationChannel.send({
+      embeds: [applicationEmbed],
+      allowedMentions: { parse: [] },
+    });
+    await interaction.reply({
+      content: 'Your B4 Redeemer beta tester application has been submitted. Staff will review it.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   // Ticket creation and close buttons.
   if (interaction.isButton() && interaction.customId === 'b4_ticket_create') {
     const guild = interaction.guild;
@@ -143,6 +236,49 @@ export async function handleCommandInteraction(
 
   try {
     switch (commandName) {
+      case 'dashboard': {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          await interaction.reply({
+            content: 'Only administrators can post the beta tester dashboard.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        if (!process.env.BETA_APPLICATION_CHANNEL_ID) {
+          await interaction.reply({
+            content: 'Set BETA_APPLICATION_CHANNEL_ID in Railway to the private staff channel where applications should be delivered, then redeploy.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle('🧪 B4 Redeemer Beta Tester Program')
+          .setDescription('Want to help test upcoming features and report bugs? Click **Apply to Beta Test** and answer the application questions. Your answers are sent privately to the configured staff application channel.')
+          .setColor(0xe53935)
+          .addFields(
+            { name: 'What beta testers do', value: '• Try new features\n• Report bugs clearly\n• Share useful feedback', inline: true },
+            { name: 'Before applying', value: 'Be respectful, give honest answers, and only apply if you can test features when available.', inline: true },
+          )
+          .setFooter({ text: 'B4 Redeemer • Beta Tester Dashboard' });
+
+        const applyButton = new ButtonBuilder()
+          .setCustomId('b4_beta_apply')
+          .setLabel('Apply to Beta Test')
+          .setStyle(ButtonStyle.Danger);
+
+        await interaction.channel.send({
+          embeds: [embed],
+          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(applyButton)],
+        });
+        await interaction.reply({
+          content: 'Beta tester dashboard posted.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
       case 'ticket-panel': {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
           await interaction.reply({ content: '❌ Only administrators can post the ticket panel.', flags: MessageFlags.Ephemeral });
