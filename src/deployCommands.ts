@@ -3,6 +3,11 @@ import { config } from './config.js';
 
 const commands = [
   new SlashCommandBuilder()
+    .setName('dashboard')
+    .setDescription('Post the B4 Redeemer beta tester application dashboard')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
     .setName('redeem-panel')
     .setDescription('Post the buyer role redemption panel in this channel'),
   new SlashCommandBuilder()
