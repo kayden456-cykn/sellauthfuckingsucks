@@ -105,12 +105,81 @@ export async function handleCommandInteraction(
       .setFooter({ text: 'B4 Redeemer • Beta Applications' })
       .setTimestamp();
 
+    const acceptButton = new ButtonBuilder()
+      .setCustomId(`b4_beta_review_accept:${interaction.user.id}`)
+      .setLabel('Accept Applicant')
+      .setStyle(ButtonStyle.Success);
+    const denyButton = new ButtonBuilder()
+      .setCustomId(`b4_beta_review_deny:${interaction.user.id}`)
+      .setLabel('Deny Applicant')
+      .setStyle(ButtonStyle.Danger);
+    const reviewDashboard = new EmbedBuilder()
+      .setTitle('📋 B4 REDEEMER • APPLICATION REVIEW')
+      .setDescription('A new beta tester application is awaiting an administrator decision.')
+      .setColor(0xe53935)
+      .addFields(
+        { name: 'STATUS', value: '🟡 PENDING REVIEW', inline: true },
+        { name: 'APPLICANT', value: `<@${interaction.user.id}>\n\`${interaction.user.id}\``, inline: true },
+        ...applicationEmbed.data.fields!.map((field: any) => ({ name: field.name, value: field.value, inline: false })),
+      )
+      .setFooter({ text: 'B4 Redeemer • Staff Review Dashboard' })
+      .setTimestamp();
+
     await applicationChannel.send({
-      embeds: [applicationEmbed],
+      embeds: [reviewDashboard],
+      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(acceptButton, denyButton)],
       allowedMentions: { parse: [] },
     });
     await interaction.reply({
       content: 'Your B4 Redeemer beta tester application has been submitted. Staff will review it.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  // Beta application decisions are restricted to server administrators.
+  if (interaction.isButton() && /^b4_beta_review_(accept|deny):\d+$/.test(interaction.customId)) {
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      await interaction.reply({ content: 'Only server administrators can accept or deny beta applications.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const [, decision, applicantId] = interaction.customId.match(/^b4_beta_review_(accept|deny):(\d+)$/)!;
+    const accepted = decision === 'accept';
+    const currentEmbed = interaction.message.embeds[0];
+    const updatedEmbed = EmbedBuilder.from(currentEmbed)
+      .setTitle(accepted ? '✅ B4 REDEEMER • APPLICATION ACCEPTED' : '⛔ B4 REDEEMER • APPLICATION DENIED')
+      .setColor(accepted ? 0x2ecc71 : 0xe74c3c)
+      .setDescription(`Decision recorded by <@${interaction.user.id}>.`)
+      .setFields(
+        ...currentEmbed.fields.filter((field: any) => field.name !== 'STATUS' && field.name !== 'REVIEWED BY'),
+        { name: 'STATUS', value: accepted ? '✅ ACCEPTED' : '⛔ DENIED', inline: true },
+        { name: 'REVIEWED BY', value: `<@${interaction.user.id}>`, inline: true },
+      )
+      .setTimestamp();
+    await interaction.update({ embeds: [updatedEmbed], components: [] });
+
+    const auditChannelId = process.env.BETA_APPLICATION_LOG_CHANNEL_ID;
+    if (auditChannelId && interaction.guild) {
+      const auditChannel = await interaction.guild.channels.fetch(auditChannelId).catch(() => null);
+      if (auditChannel && auditChannel.isTextBased() && 'send' in auditChannel) {
+        const auditEmbed = new EmbedBuilder()
+          .setTitle('📊 BETA APPLICATION • DECISION LOG')
+          .setColor(accepted ? 0x2ecc71 : 0xe74c3c)
+          .setDescription(accepted ? 'The application was **accepted**.' : 'The application was **denied**.')
+          .addFields(
+            { name: 'APPLICANT', value: `<@${applicantId}>\n\`${applicantId}\``, inline: true },
+            { name: 'DECISION', value: accepted ? '✅ ACCEPTED' : '⛔ DENIED', inline: true },
+            { name: 'ADMIN', value: `<@${interaction.user.id}>`, inline: true },
+            { name: 'REVIEW DASHBOARD', value: `[Open reviewed application](https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.message.id})` },
+          )
+          .setFooter({ text: 'B4 Redeemer • Audit Log' })
+          .setTimestamp();
+        await auditChannel.send({ embeds: [auditEmbed], allowedMentions: { parse: [] } }).catch(error => console.error('Could not write beta decision audit log:', error));
+      }
+    }
+
+    await interaction.followUp({
+      content: accepted ? `✅ Accepted <@${applicantId}>'s beta application.` : `⛔ Denied <@${applicantId}>'s beta application.`,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -247,7 +316,7 @@ export async function handleCommandInteraction(
 
         if (!process.env.BETA_APPLICATION_CHANNEL_ID) {
           await interaction.reply({
-            content: 'Set BETA_APPLICATION_CHANNEL_ID in Railway to the private staff channel where applications should be delivered, then redeploy.',
+            content: 'Set BETA_APPLICATION_CHANNEL_ID in Railway to the private staff review channel. Optionally set BETA_APPLICATION_LOG_CHANNEL_ID to a separate audit-log channel.',
             flags: MessageFlags.Ephemeral,
           });
           return;
