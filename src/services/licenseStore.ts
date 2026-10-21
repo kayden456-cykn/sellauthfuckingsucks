@@ -1,105 +1,138 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { Pool } from 'pg';
 
-type LicenseRecord = {
+type LegacyLicenseRecord = {
   key: string;
-  createdAt: string;
+  createdAt?: string;
   redeemedBy?: string;
   redeemedAt?: string;
 };
 
-const dataDirectory = path.join(process.cwd(), 'data');
-const dataFile = path.join(dataDirectory, 'license-keys.json');
+const dataFile = path.join(process.cwd(), 'data', 'license-keys.json');
+const connectionString = process.env.DATABASE_URL;
 
-let queue: Promise<unknown> = Promise.resolve();
+const pool = connectionString
+  ? new Pool({
+      connectionString,
+      ...(process.env.PGSSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
+    })
+  : null;
 
-function serialized<T>(operation: () => Promise<T>): Promise<T> {
-  const result = queue.then(operation, operation);
-  queue = result.then(() => undefined, () => undefined);
-  return result;
-}
+let initPromise: Promise<void> | null = null;
 
-async function readRecords(): Promise<LicenseRecord[]> {
-  try {
-    const parsed: unknown = JSON.parse(await readFile(dataFile, 'utf8'));
-    return Array.isArray(parsed) ? parsed as LicenseRecord[] : [];
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw error;
+async function ensureTable(): Promise<void> {
+  if (!pool) {
+    throw new Error('DATABASE_URL is required for persistent, one-time license-key redemption.');
   }
-}
 
-async function writeRecords(records: LicenseRecord[]): Promise<void> {
-  await mkdir(dataDirectory, { recursive: true });
-  await writeFile(dataFile, JSON.stringify(records, null, 2), 'utf8');
+  if (!initPromise) {
+    initPromise = (async () => {
+      await pool!.query(`
+        CREATE TABLE IF NOT EXISTS b4_license_keys (
+          license_key TEXT PRIMARY KEY,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          redeemed_by TEXT,
+          redeemed_at TIMESTAMPTZ
+        )
+      `);
+
+      // Import any legacy local records once per process, preserving existing redemptions.
+      // The database becomes the source of truth after migration.
+      try {
+        const parsed: unknown = JSON.parse(await readFile(dataFile, 'utf8'));
+        if (Array.isArray(parsed)) {
+          for (const raw of parsed as LegacyLicenseRecord[]) {
+            if (!raw || typeof raw.key !== 'string' || !raw.key.trim()) continue;
+            await pool!.query(
+              `INSERT INTO b4_license_keys (license_key, created_at, redeemed_by, redeemed_at)
+               VALUES ($1, COALESCE($2::timestamptz, NOW()), $3, $4::timestamptz)
+               ON CONFLICT (license_key) DO UPDATE
+                 SET redeemed_by = COALESCE(b4_license_keys.redeemed_by, EXCLUDED.redeemed_by),
+                     redeemed_at = COALESCE(b4_license_keys.redeemed_at, EXCLUDED.redeemed_at)`,
+              [
+                raw.key.trim().toUpperCase(),
+                raw.createdAt ?? null,
+                raw.redeemedBy ?? null,
+                raw.redeemedAt ?? null,
+              ],
+            );
+          }
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          console.error('[LicenseStore] Could not import legacy license records:', error);
+          throw error;
+        }
+      }
+    })().catch((error: unknown) => {
+      initPromise = null;
+      throw error;
+    });
+  }
+
+  await initPromise;
 }
 
 export class LicenseStore {
   static async registerKeys(keys: string[]): Promise<void> {
-    await serialized(async () => {
-      const records = await readRecords();
-      const known = new Set(records.map(record => record.key.toUpperCase()));
-      const now = new Date().toISOString();
-
-      for (const key of keys) {
-        if (!known.has(key.toUpperCase())) {
-          records.push({ key, createdAt: now });
-          known.add(key.toUpperCase());
-        }
-      }
-
-      await writeRecords(records);
-    });
+    await ensureTable();
+    for (const key of keys) {
+      const normalizedKey = key.trim().toUpperCase();
+      if (!normalizedKey) continue;
+      await pool!.query(
+        'INSERT INTO b4_license_keys (license_key) VALUES ($1) ON CONFLICT (license_key) DO NOTHING',
+        [normalizedKey],
+      );
+    }
   }
 
   static async redeemKey(key: string, discordUserId: string): Promise<
     { success: true } | { success: false; message: string }
   > {
-    return serialized(async () => {
-      const normalizedKey = key.trim().toUpperCase();
-      if (!normalizedKey) {
-        return { success: false, message: 'Enter a license key.' };
-      }
+    await ensureTable();
+    const normalizedKey = key.trim().toUpperCase();
+    if (!normalizedKey) {
+      return { success: false, message: 'Enter a license key.' };
+    }
 
-      const records = await readRecords();
-      const record = records.find(item => item.key.toUpperCase() === normalizedKey);
+    const claimed = await pool!.query(
+      `UPDATE b4_license_keys
+       SET redeemed_by = $2, redeemed_at = NOW()
+       WHERE license_key = $1 AND redeemed_by IS NULL
+       RETURNING license_key`,
+      [normalizedKey, discordUserId],
+    );
 
-      if (!record) {
-        return {
-          success: false,
-          message: 'That key is not recognized. Make sure it was generated by this bot.',
-        };
-      }
+    if (claimed.rowCount === 1) return { success: true };
 
-      if (record.redeemedBy) {
-        return {
-          success: false,
-          message: record.redeemedBy === discordUserId
-            ? 'You have already redeemed this key.'
-            : 'That key has already been redeemed.',
-        };
-      }
+    const existing = await pool!.query(
+      'SELECT redeemed_by FROM b4_license_keys WHERE license_key = $1',
+      [normalizedKey],
+    );
 
-      record.redeemedBy = discordUserId;
-      record.redeemedAt = new Date().toISOString();
-      await writeRecords(records);
-      return { success: true };
-    });
+    if (existing.rowCount !== 1) {
+      return {
+        success: false,
+        message: 'That key is not recognized. Make sure it was generated by this bot.',
+      };
+    }
+
+    return {
+      success: false,
+      message: existing.rows[0].redeemed_by === discordUserId
+        ? 'You have already redeemed this key.'
+        : 'That key has already been redeemed.',
+    };
   }
 
   static async releaseKey(key: string, discordUserId: string): Promise<void> {
-    await serialized(async () => {
-      const records = await readRecords();
-      const record = records.find(item =>
-        item.key.toUpperCase() === key.trim().toUpperCase() &&
-        item.redeemedBy === discordUserId
-      );
-
-      if (record) {
-        delete record.redeemedBy;
-        delete record.redeemedAt;
-        await writeRecords(records);
-      }
-    });
+    await ensureTable();
+    await pool!.query(
+      `UPDATE b4_license_keys
+       SET redeemed_by = NULL, redeemed_at = NULL
+       WHERE license_key = $1 AND redeemed_by = $2`,
+      [key.trim().toUpperCase(), discordUserId],
+    );
   }
 }
