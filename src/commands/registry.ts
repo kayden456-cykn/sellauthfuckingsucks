@@ -615,6 +615,14 @@ export async function handleCommandInteraction(
           throw new Error('The key was valid, but I could not assign the role. Check my Manage Roles permission and role hierarchy.');
         }
 
+        // Only delete the key after the role was successfully assigned.
+        // Unused keys remain available, and failed role assignments can be retried.
+        try {
+          await LicenseStore.deleteRedeemedKey(key, interaction.user.id);
+        } catch (error) {
+          console.error('[Redeem] Role assigned but redeemed key cleanup failed:', error);
+        }
+
         await interaction.reply({
           ...privateReply,
           content: '✅ Key redeemed successfully! Your **BUYER** role has been assigned.',
