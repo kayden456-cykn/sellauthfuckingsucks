@@ -44,14 +44,14 @@ export class RoleManager {
         return { success: false, message: 'The order ID and purchase email do not match. Check both and try again.' };
       }
 
-      // Prefer the configured role ID, but support the server's role named BUYER.
       let buyerRole = guild.roles.cache.find(role => role.name.toUpperCase() === 'BUYER') ?? null;
       if (!buyerRole && config.roles.verifiedCustomer) {
-        buyerRole = await guild.roles.fetch(config.roles.verifiedCustomer).catch(() => null);
+        const configuredRole = await guild.roles.fetch(config.roles.verifiedCustomer).catch(() => null);
+        if (configuredRole?.name.toUpperCase() === 'BUYER') buyerRole = configuredRole;
       }
 
       if (!buyerRole) {
-        console.error('[SellAuth verification] BUYER role is missing. Set ROLE_VERIFIED_CUSTOMER to its role ID or create a role named BUYER.');
+        console.error('[SellAuth verification] A role named BUYER is missing. Create/rename the role to BUYER and set ROLE_VERIFIED_CUSTOMER to its role ID if needed.');
         return { success: false, message: 'The BUYER role is not configured. Please contact a server administrator.' };
       }
 
