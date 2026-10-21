@@ -174,7 +174,7 @@ export async function handleCommandInteraction(
           )
           .setFooter({ text: 'B4 Redeemer • Audit Log' })
           .setTimestamp();
-        await auditChannel.send({ embeds: [auditEmbed], allowedMentions: { parse: [] } }).catch(error => console.error('Could not write beta decision audit log:', error));
+        await auditChannel.send({ embeds: [auditEmbed], allowedMentions: { parse: [] } }).catch((error: unknown) => console.error('Could not write beta decision audit log:', error));
       }
     }
 
