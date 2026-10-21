@@ -259,7 +259,7 @@ export async function handleCommandInteraction(
     return;
   }
 
-  // Redemption panel button opens a modal for the SellAuth order ID.
+  // Redemption panel verifies the order directly with SellAuth.
   if (interaction.isButton() && interaction.customId === 'b4_redeem_order') {
     const modal = new ModalBuilder()
       .setCustomId('b4_redeem_order_modal')
@@ -271,23 +271,54 @@ export async function handleCommandInteraction(
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setMaxLength(100);
-    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(orderIdInput));
+    const emailInput = new TextInputBuilder()
+      .setCustomId('sellauth_customer_email')
+      .setLabel('Email used for the purchase')
+      .setPlaceholder('you@example.com')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(254);
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(orderIdInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(emailInput),
+    );
     await interaction.showModal(modal);
     return;
   }
 
   if (interaction.isModalSubmit() && interaction.customId === 'b4_redeem_order_modal') {
     const orderId = interaction.fields.getTextInputValue('sellauth_order_id').trim();
-    if (!orderId || orderId.length > 100) {
-      await interaction.reply({ content: 'Please enter a valid SellAuth order ID.', flags: MessageFlags.Ephemeral });
+    const customerEmail = interaction.fields.getTextInputValue('sellauth_customer_email').trim();
+
+    if (!orderId || orderId.length > 100 || !customerEmail || customerEmail.length > 254) {
+      await interaction.reply({
+        content: 'Enter a valid SellAuth order ID and the email address used at checkout.',
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
-    // Do not automatically grant the buyer role from an order ID alone: it does not prove ownership.
-    // This safely collects the ID and lets staff verify ownership before assigning the role.
-    await interaction.reply({
-      content: `✅ Order ID \`\${orderId.replace(/\`/g, '')}\` submitted. Staff must verify the order belongs to you before assigning the **BUYER** role.`,
-      flags: MessageFlags.Ephemeral,
-    });
+
+    if (!interaction.guild) {
+      await interaction.reply({
+        content: 'Please submit your order from inside the B4 Mods server.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const result = await RoleManager.verifyAndAssign(
+      interaction.guild,
+      interaction.user.id,
+      orderId,
+      customerEmail,
+    );
+
+    await interaction.editReply(
+      result.success
+        ? `✅ Your SellAuth order was verified and the **${result.roleName}** role has been assigned.`
+        : `❌ ${result.message}`
+    );
     return;
   }
 
@@ -614,10 +645,12 @@ export async function handleCommandInteraction(
           true
         );
 
+        const customerEmail = interaction.options.getString('email', true);
         const result = await RoleManager.verifyAndAssign(
           interaction.guild,
           interaction.user.id,
-          query
+          query,
+          customerEmail
         );
 
         await interaction.reply({
