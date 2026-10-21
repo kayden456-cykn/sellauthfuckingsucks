@@ -61,7 +61,8 @@ client.user?.setPresence({
 client.on('interactionCreate', async (interaction: Interaction) => {
   if (
     !interaction.isChatInputCommand() &&
-    !interaction.isButton()
+    !interaction.isButton() &&
+    !interaction.isModalSubmit()
   ) {
     return;
   }
