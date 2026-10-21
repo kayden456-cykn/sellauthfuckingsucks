@@ -45,10 +45,10 @@ export class RoleManager {
       }
 
       // Prefer the configured role ID, but support the server's role named BUYER.
-      let buyerRole = config.roles.verifiedCustomer
-        ? await guild.roles.fetch(config.roles.verifiedCustomer).catch(() => null)
-        : null;
-      buyerRole ??= guild.roles.cache.find(role => role.name.toUpperCase() === 'BUYER') ?? null;
+      let buyerRole = guild.roles.cache.find(role => role.name.toUpperCase() === 'BUYER') ?? null;
+      if (!buyerRole && config.roles.verifiedCustomer) {
+        buyerRole = await guild.roles.fetch(config.roles.verifiedCustomer).catch(() => null);
+      }
 
       if (!buyerRole) {
         console.error('[SellAuth verification] BUYER role is missing. Set ROLE_VERIFIED_CUSTOMER to its role ID or create a role named BUYER.');
@@ -80,10 +80,13 @@ export class RoleManager {
   static async revokeCustomerRole(guild: Guild, discordUserId: string) {
     try {
       const member = await guild.members.fetch(discordUserId);
-      const role = config.roles.verifiedCustomer
-        ? await guild.roles.fetch(config.roles.verifiedCustomer).catch(() => null)
-        : guild.roles.cache.find(item => item.name.toUpperCase() === 'BUYER') ?? null;
-      if (member && role) await member.roles.remove(role);
+      const buyerRole = guild.roles.cache.find(item => item.name.toUpperCase() === 'BUYER') ?? null;
+      if (member && buyerRole) {
+        await member.roles.remove(buyerRole);
+      } else if (member && config.roles.verifiedCustomer) {
+        const configuredRole = await guild.roles.fetch(config.roles.verifiedCustomer).catch(() => null);
+        if (configuredRole) await member.roles.remove(configuredRole);
+      }
     } catch (error) {
       console.error('[RoleManager Revoke Error]', error);
     }
