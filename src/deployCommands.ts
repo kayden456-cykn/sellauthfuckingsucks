@@ -83,7 +83,13 @@ const commands = [
         .addStringOption(option =>
           option
             .setName('query')
-            .setDescription('Verification query')
+            .setDescription('SellAuth order ID')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('email')
+            .setDescription('Email address used for the purchase')
             .setRequired(true)
         )
     ),
