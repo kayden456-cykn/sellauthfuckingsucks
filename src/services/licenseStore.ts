@@ -126,6 +126,14 @@ export class LicenseStore {
     };
   }
 
+  static async deleteRedeemedKey(key: string, discordUserId: string): Promise<void> {
+    await ensureTable();
+    await pool!.query(
+      'DELETE FROM b4_license_keys WHERE license_key = $1 AND redeemed_by = $2',
+      [key.trim().toUpperCase(), discordUserId],
+    );
+  }
+
   static async releaseKey(key: string, discordUserId: string): Promise<void> {
     await ensureTable();
     await pool!.query(
