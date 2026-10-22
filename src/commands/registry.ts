@@ -348,12 +348,14 @@ export async function handleCommandInteraction(
         }
 
         const targetChannelId = '1562401796394061874';
-        const action = subcommand;
+        const action = interaction.options.getString('action');
+        const repeat = interaction.options.getInteger('repeat');
+        const goal = interaction.options.getInteger('goal');
 
         if (action === 'start') {
           const state = await SwearFarm.start(interaction.guildId, interaction.user.id);
           await interaction.reply({
-            content: `✅ Swear Farm started. It posts in <#${targetChannelId}> every 30 seconds, with **${state.repeat_count} TFs per post**. Use `/swearfarm repeat count:${state.repeat_count}` to change the count without stopping it.`,
+            content: `✅ Swear Farm started. It posts only in <#${targetChannelId}> every 30 seconds, with **${state.repeat_count} TFs per post**. Change it any time with `/swearfarm repeat:${state.repeat_count}`.`,
             flags: MessageFlags.Ephemeral,
           });
           return;
@@ -365,22 +367,35 @@ export async function handleCommandInteraction(
           return;
         }
 
-        if (action === 'repeat') {
-          const count = interaction.options.getInteger('count', true);
-          if (count < 1 || count > 500) {
-            await interaction.reply({ content: 'Repeat count must be between 1 and 500.', flags: MessageFlags.Ephemeral });
-            return;
-          }
-          const state = await SwearFarm.setRepeat(interaction.guildId, count, interaction.user.id);
+        if (action === 'leaderboard') {
+          const { state, rows } = await SwearFarm.getLeaderboard(interaction.guildId);
+          const total = Number(state.total_tf);
+          const target = Number(state.goal);
+          const progress = Math.min(100, Math.floor((total / Math.max(1, target)) * 100));
+          const topUsers = rows.length
+            ? rows.map((entry, index) => `**${index + 1}.** <@${entry.discord_user_id}> — ${Number(entry.total_tf).toLocaleString()} TFs`).join('\n')
+            : 'No leaderboard contributions yet.';
+          const embed = new EmbedBuilder()
+            .setTitle('🌾 Swear Farm • Server Leaderboard')
+            .setColor(0xe53935)
+            .setDescription(`**Server total:** ${total.toLocaleString()} / ${target.toLocaleString()} TFs (**${progress}%**)\n**Status:** ${state.active ? '🟢 Running' : '🔴 Stopped'}\n**Repeat count:** ${state.repeat_count} TFs per post`)
+            .addFields({ name: 'Top Contributors', value: topUsers.slice(0, 1024) })
+            .setFooter({ text: 'B4 Redeemer • Server-specific leaderboard' })
+            .setTimestamp();
+          await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+          return;
+        }
+
+        if (repeat !== null) {
+          const state = await SwearFarm.setRepeat(interaction.guildId, repeat, interaction.user.id);
           await interaction.reply({
-            content: `✅ Repeat count updated to **${state.repeat_count} TFs per post**. ${state.active ? 'The running farm will use this count on its next post.' : 'The farm is currently stopped; use /swearfarm start when ready.'}`,
+            content: `✅ Repeat count updated to **${state.repeat_count} TFs per post**. ${state.active ? 'The running farm will use this count on its next post.' : 'The farm is stopped; use /swearfarm action:start when ready.'}`,
             flags: MessageFlags.Ephemeral,
           });
           return;
         }
 
-        if (action === 'goal') {
-          const goal = interaction.options.getInteger('amount', true);
+        if (goal !== null) {
           const state = await SwearFarm.setGoal(interaction.guildId, goal);
           await interaction.reply({
             content: `🏆 Shared server goal set to **${Number(state.goal).toLocaleString()} TFs**. Current total: **${Number(state.total_tf).toLocaleString()}**.`,
@@ -389,29 +404,12 @@ export async function handleCommandInteraction(
           return;
         }
 
-        if (action === 'leaderboard') {
-          const { state, rows } = await SwearFarm.getLeaderboard(interaction.guildId);
-          const total = Number(state.total_tf);
-          const goal = Number(state.goal);
-          const progress = Math.min(100, Math.floor((total / Math.max(1, goal)) * 100));
-          const topUsers = rows.length
-            ? rows.map((entry, index) => `**${index + 1}.** <@${entry.discord_user_id}> — ${Number(entry.total_tf).toLocaleString()} TFs`).join('\n')
-            : 'No leaderboard contributions yet.';
-          const embed = new EmbedBuilder()
-            .setTitle('🌾 Swear Farm • Server Leaderboard')
-            .setColor(0xe53935)
-            .setDescription(`**Server total:** ${total.toLocaleString()} / ${goal.toLocaleString()} TFs (**${progress}%**)\n**Status:** ${state.active ? '🟢 Running' : '🔴 Stopped'}\n**Repeat count:** ${state.repeat_count} TFs per post`)
-            .addFields({ name: 'Top Contributors', value: topUsers.slice(0, 1024) })
-            .setFooter({ text: 'B4 Redeemer • Server-specific leaderboard' })
-            .setTimestamp();
-          await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
-          return;
-        }
-
-        await interaction.reply({ content: 'Unknown Swear Farm action.', flags: MessageFlags.Ephemeral });
+        await interaction.reply({
+          content: 'Choose an action, set repeat to a number from 1-500, or set a server goal. Farm messages are restricted to <#' + targetChannelId + '>.',
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
-
 
       case 'dashboard': {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
