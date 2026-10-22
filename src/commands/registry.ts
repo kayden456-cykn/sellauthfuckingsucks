@@ -18,6 +18,7 @@ import { InvoiceGenerator } from '../services/pdfInvoice.js';
 import { config } from '../config.js';
 import { randomBytes } from 'node:crypto';
 import { LicenseStore } from '../services/licenseStore.js';
+import { SwearFarm } from '../services/swearFarm.js';
 
 export async function handleCommandInteraction(
   client: Client,
@@ -336,6 +337,82 @@ export async function handleCommandInteraction(
 
   try {
     switch (commandName) {
+      case 'swearfarm': {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          await interaction.reply({ content: 'Only server administrators can control Swear Farm.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        if (!interaction.guildId || !interaction.guild) {
+          await interaction.reply({ content: 'Swear Farm can only be used inside a server.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+
+        const targetChannelId = '1562401796394061874';
+        const action = subcommand;
+
+        if (action === 'start') {
+          const state = await SwearFarm.start(interaction.guildId, interaction.user.id);
+          await interaction.reply({
+            content: `✅ Swear Farm started. It posts in <#${targetChannelId}> every 30 seconds, with **${state.repeat_count} TFs per post**. Use `/swearfarm repeat count:${state.repeat_count}` to change the count without stopping it.`,
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        if (action === 'stop') {
+          await SwearFarm.stop(interaction.guildId);
+          await interaction.reply({ content: '🛑 Swear Farm stopped.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+
+        if (action === 'repeat') {
+          const count = interaction.options.getInteger('count', true);
+          if (count < 1 || count > 500) {
+            await interaction.reply({ content: 'Repeat count must be between 1 and 500.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          const state = await SwearFarm.setRepeat(interaction.guildId, count, interaction.user.id);
+          await interaction.reply({
+            content: `✅ Repeat count updated to **${state.repeat_count} TFs per post**. ${state.active ? 'The running farm will use this count on its next post.' : 'The farm is currently stopped; use /swearfarm start when ready.'}`,
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        if (action === 'goal') {
+          const goal = interaction.options.getInteger('amount', true);
+          const state = await SwearFarm.setGoal(interaction.guildId, goal);
+          await interaction.reply({
+            content: `🏆 Shared server goal set to **${Number(state.goal).toLocaleString()} TFs**. Current total: **${Number(state.total_tf).toLocaleString()}**.`,
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        if (action === 'leaderboard') {
+          const { state, rows } = await SwearFarm.getLeaderboard(interaction.guildId);
+          const total = Number(state.total_tf);
+          const goal = Number(state.goal);
+          const progress = Math.min(100, Math.floor((total / Math.max(1, goal)) * 100));
+          const topUsers = rows.length
+            ? rows.map((entry, index) => `**${index + 1}.** <@${entry.discord_user_id}> — ${Number(entry.total_tf).toLocaleString()} TFs`).join('\n')
+            : 'No leaderboard contributions yet.';
+          const embed = new EmbedBuilder()
+            .setTitle('🌾 Swear Farm • Server Leaderboard')
+            .setColor(0xe53935)
+            .setDescription(`**Server total:** ${total.toLocaleString()} / ${goal.toLocaleString()} TFs (**${progress}%**)\n**Status:** ${state.active ? '🟢 Running' : '🔴 Stopped'}\n**Repeat count:** ${state.repeat_count} TFs per post`)
+            .addFields({ name: 'Top Contributors', value: topUsers.slice(0, 1024) })
+            .setFooter({ text: 'B4 Redeemer • Server-specific leaderboard' })
+            .setTimestamp();
+          await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+          return;
+        }
+
+        await interaction.reply({ content: 'Unknown Swear Farm action.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+
       case 'dashboard': {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
           await interaction.reply({
