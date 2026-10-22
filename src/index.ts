@@ -9,6 +9,7 @@ import { config } from './config.js';
 import { registerCommands } from './deployCommands.js';
 import { handleCommandInteraction } from './commands/registry.js';
 import { StockMonitor } from './services/stockMonitor.js';
+import { SwearFarm } from './services/swearFarm.js';
 
 export const client = new Client({
   intents: [
@@ -56,6 +57,7 @@ client.user?.setPresence({
   }
 
   StockMonitor.startBackgroundWatcher(client);
+  SwearFarm.startBackgroundWatcher(client);
 });
 
 client.on('interactionCreate', async (interaction: Interaction) => {
