@@ -327,46 +327,32 @@ const commands = [
     .setName('swearfarm')
     .setDescription('Manage the server Swear Farm and leaderboard')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('start')
-        .setDescription('Start the Swear Farm in the designated channel')
+    .addStringOption(option =>
+      option
+        .setName('action')
+        .setDescription('Start, stop, or view the leaderboard')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Start farm', value: 'start' },
+          { name: 'Stop farm', value: 'stop' },
+          { name: 'View leaderboard', value: 'leaderboard' }
+        )
     )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('stop')
-        .setDescription('Stop the Swear Farm')
-    )
-    .addSubcommand(subcommand =>
-      subcommand
+    .addIntegerOption(option =>
+      option
         .setName('repeat')
-        .setDescription('Change TF repetitions per post (1-500) without stopping')
-        .addIntegerOption(option =>
-          option
-            .setName('count')
-            .setDescription('Number of TF repetitions per post (1-500)')
-            .setRequired(true)
-            .setMinValue(1)
-            .setMaxValue(500)
-        )
+        .setDescription('Number of TF repetitions per post (1-500); updates live')
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(500)
     )
-    .addSubcommand(subcommand =>
-      subcommand
+    .addIntegerOption(option =>
+      option
         .setName('goal')
-        .setDescription('Set the shared server Swear Farm goal')
-        .addIntegerOption(option =>
-          option
-            .setName('amount')
-            .setDescription('Total TF count needed to reach the goal')
-            .setRequired(true)
-            .setMinValue(1)
-            .setMaxValue(1000000000)
-        )
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('leaderboard')
-        .setDescription("View this server's Swear Farm goal and leaderboard")
+        .setDescription('Set the shared server goal')
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(1000000000)
     ),
 
   new SlashCommandBuilder()
