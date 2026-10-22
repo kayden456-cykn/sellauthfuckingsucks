@@ -324,6 +324,52 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
+    .setName('swearfarm')
+    .setDescription('Manage the server Swear Farm and leaderboard')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('start')
+        .setDescription('Start the Swear Farm in the designated channel')
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('stop')
+        .setDescription('Stop the Swear Farm')
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('repeat')
+        .setDescription('Change TF repetitions per post (1-500) without stopping')
+        .addIntegerOption(option =>
+          option
+            .setName('count')
+            .setDescription('Number of TF repetitions per post (1-500)')
+            .setRequired(true)
+            .setMinValue(1)
+            .setMaxValue(500)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('goal')
+        .setDescription('Set the shared server Swear Farm goal')
+        .addIntegerOption(option =>
+          option
+            .setName('amount')
+            .setDescription('Total TF count needed to reach the goal')
+            .setRequired(true)
+            .setMinValue(1)
+            .setMaxValue(1000000000)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('leaderboard')
+        .setDescription("View this server's Swear Farm goal and leaderboard")
+    ),
+
+  new SlashCommandBuilder()
     .setName('echo')
     .setDescription('Make the bot repeat a message')
     .addStringOption(option =>
