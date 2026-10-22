@@ -415,7 +415,7 @@ export async function registerCommands(): Promise<void> {
     );
   }
 
-  const rest = new REST({ version: '10' }).setToken(
+  const rest = new REST({ version: '10', timeout: 120_000, retries: 3 }).setToken(
     config.discord.token
   );
 
