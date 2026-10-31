@@ -126,11 +126,33 @@ export async function handleCommandInteraction(
       .setFooter({ text: 'B4 Redeemer • Staff Review Dashboard' })
       .setTimestamp();
 
-    await applicationChannel.send({
+    const reviewMessage = await applicationChannel.send({
       embeds: [reviewDashboard],
       components: [new ActionRowBuilder<ButtonBuilder>().addComponents(acceptButton, denyButton)],
       allowedMentions: { parse: [] },
     });
+
+    // Send a separate application-submitted audit event to the configured log channel.
+    const auditChannelId = process.env.BETA_APPLICATION_LOG_CHANNEL_ID ?? '1565901706653339670';
+    const auditChannel = await interaction.guild.channels.fetch(auditChannelId).catch(() => null);
+    if (auditChannel && auditChannel.isTextBased() && 'send' in auditChannel) {
+      const submissionLog = new EmbedBuilder()
+        .setTitle('📥 BETA APPLICATION • SUBMITTED')
+        .setColor(0xe53935)
+        .setDescription('A new beta tester application was submitted and is pending staff review.')
+        .addFields(
+          { name: 'APPLICANT', value: `<@${interaction.user.id}>\n\`${interaction.user.id}\``, inline: true },
+          { name: 'STATUS', value: '🟡 PENDING REVIEW', inline: true },
+          { name: 'REVIEW DASHBOARD', value: `[Open application](https://discord.com/channels/${interaction.guildId}/${applicationChannel.id}/${reviewMessage.id})` },
+        )
+        .setFooter({ text: 'B4 Redeemer • Application Log' })
+        .setTimestamp();
+      await auditChannel.send({ embeds: [submissionLog], allowedMentions: { parse: [] } })
+        .catch((error: unknown) => console.error('Could not write beta submission audit log:', error));
+    } else {
+      console.error(`Beta application log channel ${auditChannelId} is unavailable or not a text channel.`);
+    }
+
     await interaction.reply({
       content: 'Your B4 Redeemer beta tester application has been submitted. Staff will review it.',
       flags: MessageFlags.Ephemeral,
@@ -159,7 +181,7 @@ export async function handleCommandInteraction(
       .setTimestamp();
     await interaction.update({ embeds: [updatedEmbed], components: [] });
 
-    const auditChannelId = process.env.BETA_APPLICATION_LOG_CHANNEL_ID;
+    const auditChannelId = process.env.BETA_APPLICATION_LOG_CHANNEL_ID ?? '1565901706653339670';
     if (auditChannelId && interaction.guild) {
       const auditChannel = await interaction.guild.channels.fetch(auditChannelId).catch(() => null);
       if (auditChannel && auditChannel.isTextBased() && 'send' in auditChannel) {
