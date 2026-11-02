@@ -7,6 +7,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ChannelSelectMenuBuilder,
+  ChannelType,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -304,6 +306,154 @@ export async function handleCommandInteraction(
     return;
   }
 
+
+  // B4 product advertisement dashboard interactions.
+  if (interaction.isButton() && interaction.customId === 'b4_ad_edit') {
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      await interaction.reply({ content: 'Only administrators can edit product advertisements.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const modal = new ModalBuilder()
+      .setCustomId('b4_ad_product_modal')
+      .setTitle('B4 Product Advertisement');
+    const name = new TextInputBuilder().setCustomId('ad_name').setLabel('Product name').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100);
+    const price = new TextInputBuilder().setCustomId('ad_price').setLabel('Price (example: $9.99)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(50);
+    const description = new TextInputBuilder().setCustomId('ad_description').setLabel('Product description').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000);
+    const buyUrl = new TextInputBuilder().setCustomId('ad_buy_url').setLabel('SellAuth purchase URL (https://...)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(500);
+    const imageUrl = new TextInputBuilder().setCustomId('ad_image_url').setLabel('Product image URL (optional)').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(500);
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(name),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(price),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(description),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(buyUrl),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(imageUrl),
+    );
+    await interaction.showModal(modal);
+    return;
+  }
+
+  if (interaction.isModalSubmit() && interaction.customId === 'b4_ad_product_modal') {
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      await interaction.reply({ content: 'Only administrators can configure product advertisements.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const name = interaction.fields.getTextInputValue('ad_name').trim();
+    const price = interaction.fields.getTextInputValue('ad_price').trim();
+    const description = interaction.fields.getTextInputValue('ad_description').trim();
+    const buyUrl = interaction.fields.getTextInputValue('ad_buy_url').trim();
+    const imageUrl = interaction.fields.getTextInputValue('ad_image_url').trim();
+    const validHttpUrl = (value: string) => {
+      try { const parsed = new URL(value); return parsed.protocol === 'https:' || parsed.protocol === 'http:'; }
+      catch { return false; }
+    };
+    if (!validHttpUrl(buyUrl) || (imageUrl && !validHttpUrl(imageUrl))) {
+      await interaction.reply({ content: 'Enter a valid http:// or https:// URL for the purchase link and image.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const dashboard = new EmbedBuilder()
+      .setTitle('🛍️ B4 REDEEMER • ADVERTISEMENT DASHBOARD')
+      .setDescription('Configure the product announcement below, choose where it should be posted, then publish it for members.')
+      .setColor(0xe53935)
+      .addFields(
+        { name: 'PRODUCT', value: name },
+        { name: 'PRICE', value: price, inline: true },
+        { name: 'POST CHANNEL', value: 'Not selected', inline: true },
+        { name: 'DESCRIPTION', value: description.slice(0, 1024) },
+        { name: 'PURCHASE LINK', value: buyUrl },
+        { name: 'IMAGE URL', value: imageUrl || 'Not set' },
+      )
+      .setFooter({ text: 'B4 Redeemer • Staff Advertisement Dashboard' })
+      .setTimestamp();
+    const channelSelect = new ChannelSelectMenuBuilder()
+      .setCustomId('b4_ad_channel')
+      .setPlaceholder('Choose the channel for this advertisement')
+      .setChannelTypes(ChannelType.GuildText)
+      .setMinValues(1)
+      .setMaxValues(1);
+    const editButton = new ButtonBuilder().setCustomId('b4_ad_edit').setLabel('Edit Product').setStyle(ButtonStyle.Secondary);
+    const publishButton = new ButtonBuilder().setCustomId('b4_ad_publish').setLabel('Publish Advertisement').setStyle(ButtonStyle.Danger);
+    await interaction.reply({
+      embeds: [dashboard],
+      components: [
+        new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(channelSelect),
+        new ActionRowBuilder<ButtonBuilder>().addComponents(editButton, publishButton),
+      ],
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  if (interaction.isChannelSelectMenu() && interaction.customId === 'b4_ad_channel') {
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      await interaction.reply({ content: 'Only administrators can configure product advertisements.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const selectedChannelId = interaction.values[0];
+    const current = EmbedBuilder.from(interaction.message.embeds[0]);
+    const fields = [...(interaction.message.embeds[0]?.fields ?? [])]
+      .filter((field: any) => field.name !== 'POST CHANNEL')
+      .map((field: any) => ({ name: field.name, value: field.value, inline: field.inline }));
+    fields.splice(2, 0, { name: 'POST CHANNEL', value: selectedChannelId, inline: true });
+    current.setFields(fields);
+    await interaction.update({ embeds: [current] });
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId === 'b4_ad_publish') {
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      await interaction.reply({ content: 'Only administrators can publish product advertisements.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const source = interaction.message.embeds[0];
+    const fields = source?.fields ?? [];
+    const field = (name: string) => fields.find((item: any) => item.name === name)?.value ?? '';
+    const productName = field('PRODUCT');
+    const price = field('PRICE');
+    const description = field('DESCRIPTION');
+    const buyUrl = field('PURCHASE LINK');
+    const imageUrl = field('IMAGE URL');
+    const channelId = field('POST CHANNEL');
+    if (!productName || !price || !description || !buyUrl || !/^\d{15,25}$/.test(channelId)) {
+      await interaction.reply({ content: 'Complete the product details and select a posting channel before publishing.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    let parsedBuyUrl: URL;
+    try { parsedBuyUrl = new URL(buyUrl); } catch {
+      await interaction.reply({ content: 'The purchase link is invalid. Edit the product details and try again.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    if (parsedBuyUrl.protocol !== 'https:' && parsedBuyUrl.protocol !== 'http:') {
+      await interaction.reply({ content: 'The purchase link must use http:// or https://.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const channel = await interaction.guild?.channels.fetch(channelId).catch(() => null);
+    if (!channel || !channel.isTextBased() || !('send' in channel)) {
+      await interaction.reply({ content: 'I cannot access that text channel. Choose another channel and try again.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const advertisement = new EmbedBuilder()
+      .setTitle(productName.slice(0, 256))
+      .setDescription(description.slice(0, 4096))
+      .setColor(0xe53935)
+      .addFields({ name: 'PRICE', value: price.slice(0, 1024) })
+      .setFooter({ text: 'B4 MODS • Official Product' })
+      .setTimestamp();
+    if (imageUrl && imageUrl !== 'Not set') {
+      try {
+        const parsedImageUrl = new URL(imageUrl);
+        if (parsedImageUrl.protocol === 'https:' || parsedImageUrl.protocol === 'http:') advertisement.setImage(parsedImageUrl.toString());
+      } catch { /* Ignore an optional invalid image URL. */ }
+    }
+    const buyButton = new ButtonBuilder().setLabel('Buy Now').setStyle(ButtonStyle.Link).setURL(parsedBuyUrl.toString());
+    await channel.send({
+      embeds: [advertisement],
+      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(buyButton)],
+      allowedMentions: { parse: [] },
+    });
+    await interaction.update({ content: '✅ Advertisement published successfully.', embeds: [], components: [] });
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const commandName: string = interaction.commandName;
@@ -387,6 +537,45 @@ export async function handleCommandInteraction(
 
         await interaction.reply({
           content: 'Choose an action, set repeat to a number from 1-500, or set a server goal. Farm messages are restricted to <#' + targetChannelId + '>.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+
+      case 'advertisement': {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          await interaction.reply({ content: 'Only administrators can open the advertisement dashboard.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        const dashboard = new EmbedBuilder()
+          .setTitle('🛍️ B4 REDEEMER • ADVERTISEMENT DASHBOARD')
+          .setDescription('Set up a product announcement for B4 MODS members. Edit the product details, choose a channel, and publish when the preview is ready.')
+          .setColor(0xe53935)
+          .addFields(
+            { name: 'PRODUCT', value: 'Not configured' },
+            { name: 'PRICE', value: 'Not configured', inline: true },
+            { name: 'POST CHANNEL', value: 'Not selected', inline: true },
+            { name: 'DESCRIPTION', value: 'Add a short description of the product.' },
+            { name: 'PURCHASE LINK', value: 'Not configured' },
+            { name: 'IMAGE URL', value: 'Not set' },
+          )
+          .setFooter({ text: 'B4 Redeemer • Staff Advertisement Dashboard' })
+          .setTimestamp();
+        const channelSelect = new ChannelSelectMenuBuilder()
+          .setCustomId('b4_ad_channel')
+          .setPlaceholder('Choose the channel for this advertisement')
+          .setChannelTypes(ChannelType.GuildText)
+          .setMinValues(1)
+          .setMaxValues(1);
+        const editButton = new ButtonBuilder().setCustomId('b4_ad_edit').setLabel('Edit Product').setStyle(ButtonStyle.Secondary);
+        const publishButton = new ButtonBuilder().setCustomId('b4_ad_publish').setLabel('Publish Advertisement').setStyle(ButtonStyle.Danger);
+        await interaction.reply({
+          embeds: [dashboard],
+          components: [
+            new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(channelSelect),
+            new ActionRowBuilder<ButtonBuilder>().addComponents(editButton, publishButton),
+          ],
           flags: MessageFlags.Ephemeral,
         });
         return;
