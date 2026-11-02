@@ -64,7 +64,8 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   if (
     !interaction.isChatInputCommand() &&
     !interaction.isButton() &&
-    !interaction.isModalSubmit()
+    !interaction.isModalSubmit() &&
+    !interaction.isAnySelectMenu()
   ) {
     return;
   }
